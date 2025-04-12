@@ -1,6 +1,6 @@
 from typing import Callable
 from libasvat.imgui.colors import Colors
-from libasvat.imgui.general import menu_item
+from libasvat.imgui.general import menu_item, object_creation_menu
 from libasvat.imgui.nodes.nodes import Node, NodePin, NodeLink, PinKind
 from imgui_bundle import imgui, imgui_node_editor  # type: ignore
 
@@ -27,29 +27,23 @@ def get_all_links_from_nodes(nodes: list[Node]):
 #   - testar o role de shortcuts do imgui-node-editor
 # TODO: esquema de salvar estado pra ter CTRL+Z (UNDO)
 # TODO: atalho de teclado pro Fit To Window
-class NodeEditor:
+class NodeSystem:
     """Represents a Node Editor system.
 
     This wraps imgui-node-editor code (immediate mode) inside a easy to use class that works with our class definitions of
     Node, NodePin and NodeLinks.
 
-    As such, this imgui control has all that is needed to provide a fully featured Node Editor for our nodes system in imgui.
+    As such, this imgui control has all that is needed to provide a fully featured Node Editor system for our nodes system in imgui.
     User only needs to call ``render_system`` each frame with imgui.
     """
 
-    def __init__(self, background_context_menu: Callable[[NodePin | None], Node] = None):
-        self.nodes: list[Node] = []
+    def __init__(self, name: str, nodes: list[Node] = None):
+        self.name = name
+        """Name to identify this system."""
+        if nodes is None:
+            nodes = []
+        self.nodes: list[Node] = nodes
         """List of existing nodes in the system."""
-        self._background_context_menu_draw_method = background_context_menu
-        """Callable used in the Editor's Background Context Menu to create a new node.
-
-        The callable should draw the controls its needs to display all options of nodes to create. If user selects a node to create,
-        the callable should return the new Node's instance. The new node doesn't need to be added to this editor, the editor does that automatically.
-
-        Callable only receives a single argument: a NodePin argument. This is the pin the user pulled a link from and selected to create a new node.
-        This might be None if the user simply clicked the background of the editor to create a new node anywhere. The callable thus can use this to
-        filter possible Nodes to allow creation.
-        """
         self._create_new_node_to_pin: NodePin = None
         """Pin from which a user pulled a new link to create a new link.
 
@@ -60,7 +54,7 @@ class NodeEditor:
         self._selected_menu_link: NodeLink = None
 
     def add_node(self, node: Node):
-        """Adds a node to this NodeEditor. This will show the node in the editor, and allow it to be edited/updated.
+        """Adds a node to this NodeSystem. This will show the node in the editor, and allow it to be edited/updated.
 
         If this node has links to any other nodes, those nodes have to be in this editor as well for the links to be shown.
         This methods only adds the given node.
@@ -70,10 +64,10 @@ class NodeEditor:
         """
         if node not in self.nodes:
             self.nodes.append(node)
-            node.editor = self
+            node.system = self
 
     def remove_node(self, node: Node):
-        """Removes the given node from this NodeEditor. The node will no longer be shown in the editor, and no longer updateable
+        """Removes the given node from this NodeSystem. The node will no longer be shown in the editor, and no longer updateable
         through the node editor.
 
         Args:
@@ -81,7 +75,7 @@ class NodeEditor:
         """
         if node in self.nodes:
             self.nodes.remove(node)
-            node.editor = None
+            node.system = None
 
     def _compare_ids(self, a_id: AllIDTypes, b_id: AllIDTypes | int):
         """Compares a imgui-node-editor ID object to another to check if they match.
@@ -125,25 +119,17 @@ class NodeEditor:
                     if self._compare_ids(link.link_id, id):
                         return link
 
-    def render_system(self, nodes: list[Node] = None):
-        """Renders this NodeEditor using imgui.
+    def render_system(self):
+        """Renders this NodeSystem using imgui, allowing the user to see/update the graph.
 
         This takes up all available content area, and splits it into two columns:
-        * A side panel/column displaying node selection details and more info.
-        * The node editor itself.
+        * A side panel/column displaying node selection details and more info (see `self.render_details_panel()`).
+        * The imgui node editor itself (see `self.render_node_editor()`).
 
         As such, will be good for UX if the window/region this is being rendered to is large or resizable.
-
-        Args:
-            nodes (list[Node], optional): If given, this will update our internal list of nodes with this new list.
-            Since this method has to be called each frame to properly render this complex control, passing this argument
-            can be used as a shortcut to also updating the existing nodes along with rendering this.
         """
-        if nodes is not None:
-            self.nodes = nodes
-
         flags = imgui.TableFlags_.borders_inner_v | imgui.TableFlags_.resizable
-        if imgui.begin_table(f"{repr(self)}NodeEditorRootTable", 2, flags):
+        if imgui.begin_table(f"{repr(self)}NodeSystemRootTable", 2, flags):
             imgui.table_setup_column("Details", imgui.TableColumnFlags_.width_stretch, init_width_or_weight=0.25)
             imgui.table_setup_column("System Graph")
 
@@ -161,8 +147,8 @@ class NodeEditor:
             imgui.end_table()
 
     def render_details_panel(self):
-        """Renders the side panel of this NodeEditor. This panel contains selection details and other info."""
-        imgui.begin_child(f"{repr(self)}NodeEditorDetailsPanel")
+        """Renders the side panel of this NodeSystem. This panel contains selection details and other info."""
+        imgui.begin_child(f"{repr(self)}NodeSystemDetailsPanel")
         has_selection = False
 
         for node in self.nodes:
@@ -179,14 +165,14 @@ class NodeEditor:
         imgui.end_child()
 
     def render_node_editor(self):
-        """Renders the Imgui Node Editor part of this NodeEditor."""
-        imgui_node_editor.begin(f"{repr(self)}NodeEditor")
+        """Renders the Imgui Node Editor part of this NodeSystem."""
+        imgui_node_editor.begin(f"{repr(self)}NodeSystem")
         backup_pos = imgui.get_cursor_screen_pos()
 
         # Step 1: Commit all known node data into editor
         # Step 1-A) Render All Existing Nodes
         for node in self.nodes:
-            node.editor = self
+            node.system = self
             node.draw_node()
 
         # Step 1-B) Render All Existing Links
@@ -391,6 +377,27 @@ class NodeEditor:
                     self.fit_to_window()
             imgui.end_popup()
 
+    def draw_background_context_menu(self, linked_to_pin: NodePin | None) -> Node | None:
+        """Internal utility method used in our Background Context Menu to allow the user to select and create a new node.
+
+        This method draws the controls its needs to display all options of nodes to create.
+        If the user selects a node to create, this returns the new Node's instance.
+
+        The default implementation of this in NodeSystem uses `libasvat.imgui.general.object_creation_menu(Node)` to
+        draw a object creation menu based on all subclasses of the base Node.
+        Subclasses SHOULD overwrite this to implement their own "new node" logic!
+
+        Args:
+            linked_to_pin (NodePin | None): The optional pin the user pulled a link from and selected to create a new node.
+                This might be None if the user simply clicked the background of the NodeSystem to create a new node anywhere.
+                This can then be used to filter possible Nodes that are allowed to be created.
+
+        Returns:
+            Node: new Node instance that was selected by the user to be created. The new node doesn't need to be added to this NodeSystem,
+            the system will do that automatically. Can be None if nothing was created.
+        """
+        return object_creation_menu(Node)
+
     def show_label(self, text: str):
         """Shows a tooltip label at the cursor's current position.
 
@@ -448,8 +455,8 @@ class NodeEditor:
         imgui_node_editor.navigate_to_content()
 
     def clear(self):
-        """Clears this editor, deleting all nodes we contain."""
+        """Clears this system, deleting all nodes we contain."""
         for node in self.nodes.copy():
             node.delete()
-            node.editor = None
+            node.system = None
         self.nodes.clear()

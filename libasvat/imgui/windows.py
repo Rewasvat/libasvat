@@ -419,7 +419,7 @@ class AppWindow(BasicWindow):
             hello_imgui.delete_ini_settings(run_params)
         else:
             click.secho(f"Couldn't find IMGUI Settings file '{ini_path}' to store in the cache.", fg="yellow")
-        # Store and remove NodeEditor json file
+        # Store and remove imgui-node-editor json file
         node_data_path = immapp.immapp_cpp.node_editor_settings_location(run_params)
         if os.path.isfile(node_data_path):
             with open(node_data_path, "r") as f:

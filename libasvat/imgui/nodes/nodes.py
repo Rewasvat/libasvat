@@ -6,7 +6,7 @@ from libasvat.idgen import IDManager
 from imgui_bundle import imgui, imgui_node_editor  # type: ignore
 
 if TYPE_CHECKING:
-    from libasvat.imgui.nodes.editor import NodeEditor
+    from libasvat.imgui.nodes.editor import NodeSystem
 
 
 def nodes_id_generator():
@@ -39,8 +39,8 @@ class Node:
         """If this object can be deleted by user-interaction."""
         self.is_selected = False
         """If this node is selected by the user in the node-editor."""
-        self.editor: NodeEditor = None
-        """NodeEditor system this node is associated with. This is the NodeEditor that is handling/editing this node."""
+        self.system: NodeSystem = None
+        """NodeSystem this node is associated with. This is the NodeSystem that is handling/editing this node."""
         self._inputs: list[NodePin] = []
         """List of input pins of this node."""
         self._outputs: list[NodePin] = []
@@ -54,7 +54,7 @@ class Node:
 
     @property
     def node_title(self) -> str:
-        """Title/name of node to display in NodeEditor. If none, defaults to ``str(self)``."""
+        """Title/name of node to display in NodeSystem. If none, defaults to ``str(self)``."""
         return self._node_title if self._node_title else str(self)
 
     @node_title.setter
@@ -314,9 +314,9 @@ class Node:
         """
         for pin in self.get_input_pins() + self.get_output_pins():
             pin.delete()
-        if self.editor:
-            self.editor.remove_node(self)
-            self.editor = None
+        if self.system:
+            self.system.remove_node(self)
+            self.system = None
         nodes_id_generator().recycle(self.node_id.id())
 
     def walk_in_graph(self, callback: Callable[['Node', int], bool], allowed_outputs: list[type['NodePin']], starting_level=0,
@@ -412,7 +412,7 @@ class Node:
             return True
 
         self.walk_in_graph(move_node, allowed_outputs)
-        self.editor.fit_to_window()
+        self.system.fit_to_window()
 
     def create_data_pins_from_properties(self):
         """Creates input and output DataPins based on our ``@input/output_property``s.
