@@ -10,6 +10,7 @@ import traceback
 import subprocess
 from collections import namedtuple
 from contextlib import contextmanager
+from typing import Callable
 
 
 MatchTuple = namedtuple("MatchTuple", "first second")
@@ -486,3 +487,24 @@ def print_all_files(path: str, indent=0):
         print(f"{prefix}* {s}")
         if os.path.isdir(os.path.join(path, s)):
             print_all_files(os.path.join(path, s), indent + 4)
+
+
+def get_all_files(path: str, filter: Callable[[str, str], bool] = None):
+    """Gets a list of file-paths in the given folder hierarchy (the folder and all subfolders and so on).
+
+    Args:
+        path (str): path to the root directory to search files for. Files in this folder are included.
+        filter (Callable[[str, str], bool], optional): Optional callable to filter the file-paths in the return.
+            If given, should be a `(path: str, filename: str) -> bool` callable, that receives the path to the file
+            and the filename, and returns a boolean indicating if this file-path should be included in the result or not.
+            If None, all files are included in the result.
+
+    Returns:
+        list[str]: list of all file-paths inside the given `path` top-level dir. The file-paths follow the format of
+        `<path>/<intermediary paths>/filename`. So if the given `path` is an absolute-path, all file-paths are absolute as well.
+        Otherwise, all file-paths are relative, including the initial `path`.
+    """
+    results: list[str] = []
+    for root, dirs, files in os.walk(path):
+        results += [os.path.join(root, name) for name in files if (filter is None) or filter(root, name)]
+    return results
