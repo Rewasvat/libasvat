@@ -363,14 +363,13 @@ class NodeSystem:
     def render_background_context_menu(self):
         """Renders the node editor's background context menu."""
         if imgui.begin_popup("BackgroundContextMenu"):
-            if self._background_context_menu_draw_method:
-                pos = imgui.get_cursor_screen_pos()
-                new_node = self._background_context_menu_draw_method(self._create_new_node_to_pin)
-                if new_node:
-                    self.add_node(new_node)
-                    if self._create_new_node_to_pin:
-                        self.try_to_link_node_to_pin(new_node, self._create_new_node_to_pin)
-                    imgui_node_editor.set_node_position(new_node.node_id, imgui_node_editor.screen_to_canvas(pos))
+            pos = imgui.get_cursor_screen_pos()
+            new_node = self.draw_background_context_menu(self._create_new_node_to_pin)
+            if new_node:
+                self.add_node(new_node)
+                if self._create_new_node_to_pin:
+                    self.try_to_link_node_to_pin(new_node, self._create_new_node_to_pin)
+                imgui_node_editor.set_node_position(new_node.node_id, imgui_node_editor.screen_to_canvas(pos))
             if self._create_new_node_to_pin is None:
                 imgui.separator()
                 if menu_item("Fit to Window"):

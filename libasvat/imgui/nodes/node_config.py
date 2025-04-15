@@ -246,5 +246,5 @@ class SystemConfig:
     @classmethod
     def from_system(cls, system: NodeSystem):
         """Creates a new SystemConfig based on the given NodeSystem."""
-        configs = [NodeConfig.from_node(node) for node in system.node_editor.nodes]
+        configs = [NodeConfig.from_node(node) for node in system.nodes]
         return cls(type(system), system.name, configs)
