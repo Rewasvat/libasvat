@@ -5,6 +5,7 @@ import os
 import sys
 import copy
 import click
+import pkgutil
 import importlib
 import traceback
 import subprocess
@@ -185,7 +186,6 @@ def walkpkg(pkg_path: str):
     Returns:
         list[str]: list of path for all scripts in the package. The `pkg_path` arg will be be included as prefix to all values.
     """
-    import pkgutil
     modules: list[str] = []
     for mod in pkgutil.walk_packages([pkg_path], prefix=pkg_path+os.path.sep):
         if mod.ispkg:
@@ -193,6 +193,20 @@ def walkpkg(pkg_path: str):
         else:
             modules.append(mod.name)
     return modules
+
+
+def get_package_filepath(pkg_name: str) -> str:
+    """Gets the absolute filesystem path to the given package's folder.
+
+    Args:
+        pkg_name (str): python package/module name.
+
+    Returns:
+        str: absolute filesystem path, or None of the package wasn't found.
+    """
+    mod = pkgutil.resolve_name(pkg_name)
+    if mod:
+        return os.path.dirname(mod.__file__)
 
 
 class Table(dict):

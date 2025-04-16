@@ -5,6 +5,15 @@ from libasvat.imgui.math import Rectangle
 from imgui_bundle import imgui_node_editor  # type: ignore
 
 
+# TODO: atualizar SystemConfig e NodeConfig pra invés de salvar a classe (tipo) em si do objeto, salvar node deles.
+#   ai no instantiate podemos pegar todas subclasses de NodeSystem/Node pra achar a que tem o tal nome.
+#   - isso vai deixar o sistema de configs mais failsafe, pq:
+#       - caso uma classe tenha mudado de path, vai continuar funcionando invés de quebrar (e quebraria no pickle.load já)
+#       - caso classe seja renomeada, vai quebrar do mesmo jeito de ambos jeitos
+#       - se a classe não existir, podemos determinar isso aqui, nos instantiate(), em vez de no pickle.load() que atrapalha tudo
+# TODO: error detection/reporting nos instantiate():
+#   - fazer os instantiate detectarem erros q podem acontecer, e retornarem tais erros somehow se alguma merda acontecer, em vez de crashar
+
 class PinLinkConfig:
     """Information about a link from a specific pin in the node from a ``NodeConfig``."""
 

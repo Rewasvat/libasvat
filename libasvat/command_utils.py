@@ -1,18 +1,23 @@
+import os
+import sys
 import copy
 import click
 import inspect
 import fnmatch
+import traceback
+import libasvat.utils as utils
+from imgui_bundle import hello_imgui  # type: ignore
 
-_main_commands = []
+_root_commands = []
 
 
-def main_command_group(cls):
-    """Marks this CLASS as a 'main command group'
+def root_command_group(cls):
+    """Marks this CLASS as a 'root command group'
 
-    Main command groups are listed and initialized by the Main/Root command-group class, and constitutes
+    Root command groups are listed and initialized by the Root command-group class (see ``RootCommands``), and constitutes
     the first level sub-groups from the app's root.
     """
-    _main_commands.append(cls)
+    _root_commands.append(cls)
     return cls
 
 
@@ -692,7 +697,7 @@ class DynamicGroup(click.Group):
         This solves the issue mentioned in the previous NOTE, and thus any command from the class or from base-classes *should* work...
         However, this is a more complex solution that wasn't fully tested...
         """
-        if not callable(method):
+        if not callable(method) or not hasattr(method, "__name__"):
             return
         value = getattr(method, attr_name, None)
         if value is not None:
@@ -829,3 +834,185 @@ class DynamicGroup(click.Group):
         for var_name in supported_values:
             if var_name in config:
                 setattr(self, var_name, config[var_name])
+
+
+class RootCommands(metaclass=Singleton):
+    """Base Singleton class for the Root Commands of an app.
+
+    This singleton does the basic setup for a app's CLI/IMGUI interactions:
+    * Sets up `DataCache`'s app-name.
+    * Sets up IMGUI's Assets Folder.
+    * Loads all package modules in order to load all `@root_command_group` in the app/package, thus automatically
+    populating this CLI command-group with all sub-command-groups of the package dynamically.
+    * Automatically calls `DataCache.shutdown()` on finalize, in order to save the cache when exiting the program.
+
+    An app should subclass this in order to create its own "Root Commands" singleton. Besides some optional config attributes,
+    the only required configuration is setting up the `app_name` property before initialization. The subclass can also override:
+    * `initialize()`: to configure `app_name` before initialization, or adding custom initialization logic.
+    * `finalize()`: to add custom shutdown logic
+    * and more...
+
+    Usage:
+    ```python
+    # at app.py (in 'myapp' package)
+    class MyProgram(RootCommands):
+        def initialize(self):
+            self.app_name = "myapp"
+            super().initialize()
+
+    # 'main' here is a click group. This should be the app's CLI root group.
+    # It can be used as the package's console entry-point for CLI applications.
+    main = MyProgram().click_group
+
+    ###################
+    # at setup.py:
+    setuptools.setup(
+        # ...
+        entry_points={
+            "console_scripts": [
+                "myapp = myapp.app:main"
+            ]
+        },
+        # ...
+    )
+    """
+
+    def __init__(self):
+        self._app_name: str = None
+        self._command_objects = []
+        """List of root-command-group objects. These are instances of the classes tagged with ``@root_command_group``"""
+        self.debug_enabled: bool = True
+        """If Python debugging is enabled for this app. If true (the default), using a `-d`/`--debug` option with the
+        root app command will start `debugpy`'s waiting to connect to a Python debugger."""
+        self.module_ignore_paths: list[str] = []
+        """Module paths from this app's package to ignore when loading all modules during initialization to find Root Command Groups.
+        See `ignore_paths` param from `utils.load_all_modules()`.
+        """
+        self._package_path: str = None
+        self._click_group: DynamicGroup = None
+        self.initialize()
+
+    @property
+    def app_name(self):
+        """The name of this app.
+
+        This can only be set once, and must be set before initialization. The app-name:
+        * Should be the same name as the Python Package defining/using this RootCommands object.
+        * The app-name will also be the CLI's root command name.
+        * The app-name will also be the DataCache's app-name (see ``DataCache.set_app_name``).
+        * The name is used to get the package's root folder path, and `<root-folder>/assets/` is used as IMGUI's Assets Folder.
+        * The package's modules are loaded in order to load root command groups to add to this CLI.
+        """
+        if self._app_name is None:
+            raise RuntimeError("RootCommands.app_name not defined! This must be done before initialization.")
+        return self._app_name
+
+    @app_name.setter
+    def app_name(self, value: str):
+        if self._app_name is None:
+            self._app_name = value
+
+    @property
+    def package_path(self):
+        """Absolute path to this app's package directory."""
+        return self._package_path
+
+    @property
+    def assets_path(self):
+        """Absolute path to the app's assets folder (`<package>/assets`)."""
+        return os.path.join(self._package_path, "assets")
+
+    def initialize(self):
+        """Called on initialization of this RootCommands singleton.
+        * Sets DataCache's app-name to the configured app-name.
+        * Sets IMGUI's Assets Folder as `<package>/assets/`, where `<package>` is the root folder of our configured app package.
+        * Loads all modules from the given app package, to load all root command groups to add to this root group.
+        """
+        self._package_path = utils.get_package_filepath(self.app_name)
+        # Setup IMGUI Assets dir
+        hello_imgui.set_assets_folder(self.assets_path)
+        # Setup DataCache
+        from libasvat.data import DataCache
+        data = DataCache()
+        data.set_app_name(self.app_name)
+        # Load command groups
+        utils.load_all_modules(self._package_path, self.app_name, ignore_paths=self.module_ignore_paths)
+        self._command_objects = [cls() for cls in _root_commands]
+
+    @sub_groups()
+    def get_commands(self):
+        """Gets the command objects."""
+        return self._command_objects
+
+    @group_callback
+    def on_group_callback(self, ctx: click.Context, debug):
+        """Group callback, called when a subcommand/subgroup is executed or if this group is executed as a
+        command (and has invoke_without_command=True)."""
+        if self.debug_enabled and debug:
+            import debugpy
+            port = 5678
+            debugpy.listen(port)
+            click.secho(f"[DEBUGGER] Waiting connection at port {port}...", fg="magenta")
+            debugpy.wait_for_client()
+            click.secho("[DEBUGGER] CONNECTED!", fg="magenta")
+
+    @result_callback
+    def finalize(self, result, **kwargs):
+        """Handles processing performed *after* the group has executed its desired command(s),
+        when the app is exiting."""
+        from libasvat.data import DataCache
+        data = DataCache()
+        data.shutdown()
+
+    @property
+    def click_group(self):
+        """Creates an instance of our click's `DynamicGroup` class, using this RootCommands singleton as wrapped object.
+
+        The DynamicGroup object is expected to be the app's root (or main) command group for its CLI hierarchy, and as such
+        is configured with a name matching the RootCommands's app-name, a `-h`/`--help` help option, and a optional `-d`/`--debug`
+        debug flag if the RootCommans() `debug_enabled` is True.
+        """
+        if self._click_group:
+            return self._click_group
+
+        debug_help = "Initializes this app with Python Debugger (debugpy) active, "
+        debug_help += "listening in localhost at port 5678."
+
+        self._click_group = DynamicGroup(self, self.app_name, context_settings={"help_option_names": ["-h", "--help"]})
+        if self.debug_enabled:
+            # TODO: idealmente essa debug option devia ser definida junto com o on_group_callback lá.
+            click.option("-d", "--debug", is_flag=True, help=debug_help)(self._click_group)
+            click.version_option()(self._click_group)
+        return self._click_group
+
+    def get_default_standalone_args(self) -> list[str]:
+        """Gets the default cmd-line args to this application.
+
+        This is used to define the default CLI command to execute when running this app in standalone
+        mode (see ``self.check_standalone_execution()``).
+        """
+        return []
+
+    def check_standalone_execution(self):
+        """Performs running logic if we're running in standalone (or "built executable") mode (see ``utils.is_frozen()``).
+
+        If we're in standalone mode, this does:
+        * Simple print indicating running in standalone mode.
+        * If running with no args (from ``sys.argv``), gets default args from ``self.get_default_standalone_args()``.
+        * Executes our CLI group passing the cmd-line args (above point) inside a TRY/EXCEPT block.
+            * If a exception is caught, it is printed to the output and a dummy `input()` call blocks the terminal from exiting
+            to ensure the user can read the exception traceback.
+
+        Essentially this executes (with a failsafe) one of our CLI commands from click if we're in standalone mode, since the
+        built executable may not run the expected CLI console entry-point from the python package.
+        """
+        if utils.is_frozen():
+            click.secho(f"Running {self.app_name.upper()} in standalone executable mode.", fg="green")
+            cmd_line_args = sys.argv[1:]
+            if len(cmd_line_args) <= 0:
+                cmd_line_args = self.get_default_standalone_args()
+            try:
+                self.click_group(cmd_line_args)
+            except Exception:
+                click.secho(f"{traceback.format_exc()}\nUNHANDLED EXCEPTION / Closing {self.app_name.upper()}.", fg="red")
+                input("Press ENTER to close...")
