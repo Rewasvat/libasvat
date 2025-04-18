@@ -19,9 +19,9 @@ setuptools.setup(
     url="https://github.com/Rewasvat/libasvat",
     packages=setuptools.find_packages(),
     classifiers=[
-        "Programming Language :: Python :: 3",
-        "License :: Exclusive Copyright",
+        "Programming Language :: Python :: 3.13",
         "Operating System :: OS Independent",
+        "Development Status :: 5 - Production/Stable",
     ],
-    install_requires=["Click>=8.1.0", "Colorama", "keyring", "imgui-bundle"]
+    install_requires=["Click>=8.1.0", "Colorama", "keyring", "imgui-bundle", "debugpy"]
 )

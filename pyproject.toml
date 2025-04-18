@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "libasvat"
+version = "1.0.0"
+authors = [
+  { name="Fernando Omar Aluani", email="rewasvat@gmail.com" },
+]
+description = "Python library package with a collection of utility modules, from simple general utility functions to more complex IMGUI (imgui-bundle) utility classes."
+readme = "README.md"
+requires-python = ">=3.13"
+classifiers = [
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Development Status :: 5 - Production/Stable",
+]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+dependencies = [
+    "Click>=8.1.0",
+    "Colorama",
+    "keyring",
+    "imgui-bundle",
+    "debugpy",
+]
+
+[project.urls]
+Homepage = "https://github.com/Rewasvat/libasvat"
+Issues = "https://github.com/Rewasvat/libasvat/issues"
