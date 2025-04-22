@@ -214,6 +214,22 @@ class AppWindow(BasicWindow):
         However, the resizing widget doesn't work well if the status-bar is enabled (see `show_status_bar`).
         Also, regular OS window shortcuts won't work, such as double-clicking the title bar to maximize it.
         """
+        self.enable_fps_idling: bool = True
+        """If FPS Idling is enabled. Default is enabled.
+
+        When enabled, the window's FPS will lower to the capped max value of ``self.idle_fps`` after a few seconds of no user-interaction.
+        If any interaction occurs (such as moving the mouse), the window's FPS will return to normal.
+
+        This can be changed in runtime by the app's menu or status bar, if they're enabled.
+        """
+        self.idle_fps: float = 1.0
+        """The FPS at which the window will run when idling (see ``self.enable_fps_idling``)"""
+        self.remember_enable_idling: bool = True
+        """If the ``self.enable_fps_idling`` flag will be persisted with the window's cached settings.
+
+        When true, this essentially overwrites ``self.enable_fps_idling`` to the user's selected value if the window has been
+        opened once before.
+        """
 
     def run(self):
         """Runs this window as a new IMGUI App.
@@ -258,8 +274,9 @@ class AppWindow(BasicWindow):
 
         run_params.ini_folder_type = hello_imgui.IniFolderType.home_folder
 
-        run_params.fps_idling.enable_idling = True
-        run_params.fps_idling.fps_idle = 1
+        run_params.fps_idling.enable_idling = self.enable_fps_idling
+        run_params.fps_idling.fps_idle = self.idle_fps
+        run_params.fps_idling.remember_enable_idling = True
 
         # For simplicity, we're using the common imgui settings ini-file. However we create it here and delete it on before-exit,
         # while saving the settings data in our DataCache. This way the settings should be persisted by the cache for every window,
@@ -297,6 +314,8 @@ class AppWindow(BasicWindow):
             add_ons_params=addons
         )
 
+        # Need to pass the run_params ourselves instead of getting them inside the method since by now, in this new imgui-bundle version (1.6.2),
+        # get_runner_params() fails at this point, presumably because it is no longer running.
         self.store_settings_on_cache(run_params)
 
     def render_status_bar(self):
@@ -396,7 +415,7 @@ class AppWindow(BasicWindow):
             return True
         return False
 
-    def store_settings_on_cache(self, run_params: hello_imgui.RunnerParams):
+    def store_settings_on_cache(self, run_params: hello_imgui.RunnerParams = None):
         """Stores the IMGUI settings files in the DataCache, and removes them from the disk.
 
         IMGUI (and separately the imgui-node-editor) generate a specific ``.ini`` (``.json`` for node-editor) file when it runs.
@@ -407,9 +426,14 @@ class AppWindow(BasicWindow):
         this AppWindow (by name). When this AppWindow is ``run()``, it recreates these files from the cached data so that IMGUI works as
         expected since the last execution. This way, IMGUI works as expected across multiple runs and the disk remains clean of generated
         file clutter.
+
+        RUN_PARAMS is the optional RunnerParams running this window to store settings from in the cache. If None, we'll try to get the current
+        params being used.
         """
         cache = DataCache()
         # Store and remove INI Settings file
+        if run_params is None:
+            run_params = hello_imgui.get_runner_params()
         ini_path = hello_imgui.ini_settings_location(run_params)
         if os.path.isfile(ini_path):
             with open(ini_path) as f:

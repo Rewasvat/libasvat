@@ -23,5 +23,11 @@ setuptools.setup(
         "Operating System :: OS Independent",
         "Development Status :: 5 - Production/Stable",
     ],
-    install_requires=["Click>=8.1.0", "Colorama", "keyring", "imgui-bundle", "debugpy"]
+    install_requires=[
+        "Click>=8.1.0", "Colorama",  # Click (command-line/print) related stuff
+        "keyring",  # System service for storing private data
+        "imgui-bundle",  # GUI
+        "debugpy",  # Enables python debugger
+        "google-api-python-client", "google-auth-oauthlib",  # Libs for Google Sheet and related auth
+    ]
 )
