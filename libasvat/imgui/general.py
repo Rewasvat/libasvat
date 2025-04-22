@@ -33,11 +33,15 @@ def imgui_splitter(split_vertically: bool, thickness: float, size0: float = 0, s
     backup_pos = imgui.get_cursor_pos()
     splitter_width = thickness if (not split_vertically) else -1.0
     splitter_height = thickness if (split_vertically) else -1.0
+    splitter_pos = imgui.get_cursor_pos()
+    if split_vertically:
+        splitter_pos.y = backup_pos.y + size0
+    else:
+        splitter_pos.x = backup_pos.x + size0
     delta = imgui_custom_drag_area(
         width=splitter_width,
         height=splitter_height,
-        x=(not split_vertically) and (backup_pos.x + size0),
-        y=split_vertically and (backup_pos.y + size0)
+        pos=splitter_pos
     )
     if delta:
         mouse_delta = delta.y if split_vertically else delta.x
@@ -75,9 +79,9 @@ def imgui_custom_drag_area(width: float, height: float, pos: ImVec2 = None, colo
     if hovered_color is None:
         hovered_color = ImVec4(0.6, 0.6, 0.6, 0.1)
     backup_pos = imgui.get_cursor_pos()
-    imgui.push_style_color("Button", color)
-    imgui.push_style_color("ButtonActive", active_color)
-    imgui.push_style_color("ButtonHovered", hovered_color)
+    imgui.push_style_color(imgui.Col_.button, color)
+    imgui.push_style_color(imgui.Col_.button_active, active_color)
+    imgui.push_style_color(imgui.Col_.button_hovered, hovered_color)
     imgui.set_cursor_pos(pos or backup_pos)
     imgui.button("##Splitter", ImVec2(width, height))
     imgui.pop_style_color(3)
@@ -190,11 +194,16 @@ def enum_drop_down(value: Enum, fixed_doc: str = None, flags: imgui.SelectableFl
 
 
 def not_user_creatable(cls):
-    """Class-decorator to mark a Widget class as being "Not User Creatable".
+    """Class-decorator to mark a class as being "Not User Creatable".
 
-    Which means the user won't be able to create a instance of this class using the runtime menu options.
-    However, subclasses of this class will still show up in the widget-creation menu. This decorator only affects
-    this class, repeat it on subclasses to disable user-creation of those as well."""
+    This mark is used by systems that allow a user to somehow select a class (from a class hierarchy), such as
+    the `general.object_creation_menu()` utility. Thus the code can have a full class-hierarchy for such a system,
+    with a base class, and several levels of subclasses, allowing the user to select any class in the hierarchy
+    except those that are marked with this decorator. Therefore its possible for the hierarchy to have "abstract"
+    classes the user can't use, but can still serve as base-classes for other regular user-selectable classes.
+
+    This decorator only affects this class, repeat it on subclasses to disable user-creation of those as well.
+    """
     if not hasattr(cls, "__class_tags"):
         cls.__class_tags = {}
     if cls.__name__ not in cls.__class_tags:
@@ -266,6 +275,8 @@ def id_block(id: str):
 
     Pushes the given ID to IMGUI, yields, and finally pops the ID.
 
+    NOTE: DEPRECATED! Use imgui-bundle's ``imgui_ctx.push_id(id)`` instead.
+
     Args:
         id (str): ID to push to imgui's ID stack.
     """
@@ -280,6 +291,8 @@ def child_region(region_id: str, size: ImVec2 = (0, 0), child_flags: imgui.Child
 
     Begins a child-region, pushes imgui ID, and then yields. Afterwards, pops the ID and ends the child-region.
 
+    NOTE: DEPRECATED! Use imgui-bundle's ``imgui_ctx.begin_child()`` instead.
+
     Args:
         region_id (str): ID used for the child-region and pushed imgui-ID.
         size (ImVec2, optional): Size of the child region. Defaults to (0, 0), which takes all available space.
@@ -291,3 +304,52 @@ def child_region(region_id: str, size: ImVec2 = (0, 0), child_flags: imgui.Child
     yield
     imgui.pop_id()
     imgui.end_child()
+
+
+def simple_table(table_id: str, columns: dict[str, Callable[[str], None]], weights: dict[str, int] = None):
+    """Draws a simple IMGUI table with the given COLUMNS.
+
+    This is essentially splitting the content into several independent columns. There are no rows or any kind of relation between the columns.
+
+    Args:
+        table_id (str): internal IMGUI ID for this table.
+        columns (dict[str, Callable[[str], None]]): A `{column_name: render_method}` table, where COLUMN_NAME is the name for that column, and RENDER_METHOD
+            is a `method(column_name) -> None` method that is called to draw the contents of that column, and receives the `column_name` string.
+        weights (dict[str, int], optional): Optional `{column_name: weight}` table to indicate initial width weights for each column. If given,
+            the table's width will be divided amongst the columns with these weights. Columns can still be resized by the user during runtime.
+    """
+    flags = imgui.TableFlags_.borders_v | imgui.TableFlags_.resizable
+    num_columns = len(columns)
+    if imgui.begin_table(table_id, num_columns, flags):
+        imgui.table_setup_scroll_freeze(0, 1)
+
+        for col_name in columns.keys():
+            if weights:
+                imgui.table_setup_column(col_name, imgui.TableColumnFlags_.width_stretch, init_width_or_weight=weights.get(col_name, 0))
+            else:
+                imgui.table_setup_column(col_name)
+
+        imgui.table_headers_row()
+
+        imgui.table_next_row()
+
+        for col_name, col_render_method in columns.items():
+            imgui.table_next_column()
+            col_render_method(col_name)
+
+        imgui.end_table()
+
+
+def button_with_tooltip(label: str, tooltip: str):
+    """Utility to draw a IMGUI button with the given tooltip.
+
+    Args:
+        label (str): button label
+        tooltip (str): tooltip description
+
+    Returns:
+        bool: if button was pressed
+    """
+    pressed = imgui.button(label)
+    imgui.set_item_tooltip(tooltip)
+    return pressed

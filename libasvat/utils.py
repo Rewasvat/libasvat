@@ -481,11 +481,6 @@ def is_unpickling(obj: object) -> bool:
     return getattr(obj, "__in_setstate", False)
 
 
-def is_frozen():
-    """Checks if this app is running in frozen-mode: as a standalone executable bundled by PyInstaller."""
-    return getattr(sys, "frozen", False)
-
-
 def print_all_files(path: str, indent=0):
     """Pretty-prints to the output the names of all files and directories in the given PATH.
 
@@ -522,3 +517,54 @@ def get_all_files(path: str, filter: Callable[[str, str], bool] = None):
     for root, dirs, files in os.walk(path):
         results += [os.path.join(root, name) for name in files if (filter is None) or filter(root, name)]
     return results
+
+
+def pop_by_value(d: dict, obj):
+    """Removes the first item in the given Dict whose value matches the given OBJ.
+    Does nothing if OBJ is not a value of D."""
+    key_to_remove = None
+    for key, value in d.items():
+        if value == obj:
+            key_to_remove = key
+            break
+    if key_to_remove is not None:
+        d.pop(key_to_remove)
+
+
+def error_safe(msg: str, default=None):
+    """Function/method decorator to wrap the function in a TRY/EXCEPT block.
+
+    Catches all exceptions. When an exception is caught, a message is printed to the output using Click,
+    containing the function's qualified-name and exception traceback/message.
+
+    Args:
+        msg (str): custom text to add to the error message, when an exception is caught.
+        default (any, optional): Value that the wrapped function will return when an exception is caught. Defaults to None.
+    """
+    def decorator(f):
+        def wrapped(*args, **kwargs):
+            try:
+                return f(*args, **kwargs)
+            except Exception:
+                click.secho(f"ERROR in {f.__qualname__}: {msg}\n{traceback.format_exc()}", fg="red")
+                return default
+        return wrapped
+    return decorator
+
+
+def is_frozen() -> bool:
+    """Checks if this app is running in FROZEN mode.
+
+    Frozen means the app is bundled in a executable file for standalone distribution (as created by PyInstaller).
+    While not frozen means the app is running from its source, as a python package."""
+    return getattr(sys, "frozen", False)
+
+
+def try_app_restart():
+    """Will try to restart this application.
+
+    This only works in standalone-mode (see `is_frozen()`).
+    """
+    if is_frozen():
+        subprocess.Popen([sys.executable], env={**os.environ, "PYINSTALLER_RESET_ENVIRONMENT": "1"})
+        sys.exit(0)

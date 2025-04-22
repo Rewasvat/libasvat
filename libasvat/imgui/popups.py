@@ -69,6 +69,46 @@ class BasePopup:
         self.is_visible = False
 
 
+def generic_popup[T](trigger_open: bool, title: str, contents: Callable[[], T], size: Vector2 = None) -> T | None:
+    """Imgui utility to open and render a GENERIC popup.
+
+    The popup is a simple modal popup, meaning it displays as a overlay on top of everything else,
+    blocking interactions until the popup is closed. The popup window:
+    * Has the given `title` in the title bar.
+    * Has the initial given `size`, and can be resized by the user afterwards.
+    * Has a `X` close button besides the title, that allows closing the popup.
+    * Will use the given `contents()` function to draw imgui contents inside the popup:
+        * The `contents()` can use ``imgui.close_current_popup()`` to close the popup programatically.
+        * The value returned by `contents()` is the one returned by this function. So the popup can give out a return value of some
+        kind to be used by whoever is calling this.
+
+    Args:
+        trigger_open (bool): If the popup should be opened on this frame. This needs to be true in a single frame, as the return from `imgui.button()`.
+        title (str): Title of the popup window. Ideally, this should be unique between popups in the same Imgui context.
+        contents (callable() -> T): Callable that when executed will draw (using imgui) the popup's contents.
+        size (Vector2, optional): Initial size of the popup window when opened. Defaults to the title's size x(2, 8).
+
+    Returns:
+        T: the value returned by the ``contents()`` function, or None if the popup isn't opened.
+    """
+    if trigger_open:
+        # NOTE: open_popup needs to be called in the same imgui ID context as its begin_popup.
+        imgui.open_popup(title, imgui.PopupFlags_.mouse_button_left)
+        if not size:
+            size = Vector2(*imgui.calc_text_size(title)) * (4, 16)
+        imgui.set_next_window_size(size)
+
+    result = None
+    opened, is_visible = imgui.begin_popup_modal(title, True)
+    if opened:
+        result = contents()
+        if not is_visible:
+            imgui.close_current_popup()
+        imgui.end_popup()
+
+    return result
+
+
 def generic_button_with_popup[T](label: str, title: str, contents: Callable[[], T], size: Vector2 = None) -> T | None:
     """Imgui utility to display a button with the given `label`, that when pressed will open a GENERIC popup.
 
@@ -91,22 +131,33 @@ def generic_button_with_popup[T](label: str, title: str, contents: Callable[[], 
     Returns:
         T: the value returned by the ``contents()`` function, or None if the popup isn't opened.
     """
-    if imgui.button(label):
-        # NOTE: open_popup needs to be called in the same imgui ID context as its begin_popup.
-        imgui.open_popup(title, imgui.PopupFlags_.mouse_button_left)
-        if not size:
-            size = Vector2(*imgui.calc_text_size(title)) * (4, 16)
-        imgui.set_next_window_size(size)
+    trigger = imgui.button(label)
+    return generic_popup(trigger, title, contents, size)
 
-    result = None
-    opened, is_visible = imgui.begin_popup_modal(title, True)
-    if opened:
-        result = contents()
-        if not is_visible:
+
+def confirmation_popup_contents(message: str):
+    """Utility function to draw the contents of a simple Ok/Cancel confirmation popup with the given message.
+
+    Args:
+        message (str): Message to display inside the popup contents.
+
+    Returns:
+        function: a `() -> bool` callable that draws the popup's contents using IMGUI. The returned boolean indicates if the popup
+        was closed with confirmation by the user or not.
+    """
+    def draw_contents() -> bool:
+        imgui.text_wrapped(message)
+        confirmed = False
+        if imgui.button("Cancel"):
             imgui.close_current_popup()
-        imgui.end_popup()
+        width = imgui.get_content_region_avail().x
+        imgui.same_line(width - 30)
+        if imgui.button("Ok"):
+            confirmed = True
+            imgui.close_current_popup()
+        return confirmed
 
-    return result
+    return draw_contents
 
 
 def button_with_confirmation(label: str, title: str, message: str, size: Vector2 = None):
@@ -124,20 +175,7 @@ def button_with_confirmation(label: str, title: str, message: str, size: Vector2
     Returns:
         bool: if the user confirmed the selection inside the popup or not.
     """
-
-    def draw_contents() -> bool:
-        imgui.text_wrapped(message)
-        confirmed = False
-        if imgui.button("Cancel"):
-            imgui.close_current_popup()
-        width = imgui.get_content_region_avail().x
-        imgui.same_line(width - 30)
-        if imgui.button("Ok"):
-            confirmed = True
-            imgui.close_current_popup()
-        return confirmed
-
-    return generic_button_with_popup(label, title, draw_contents, size)
+    return generic_button_with_popup(label, title, confirmation_popup_contents(message), size)
 
 
 def button_with_text_input(label: str, title: str, message: str, value: str, validator: Callable[[str], tuple[bool, str]] = None,
