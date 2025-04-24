@@ -143,7 +143,7 @@ class DataCache(metaclass=Singleton):
                 self._cache_data = {}
         return self._cache_data
 
-    def get_data(self, key, default=None):
+    def get_data(self, key: str, default=None):
         """Gets a data object from the persisted data cache.
         If the object specified by KEY doesn't exist, DEFAULT is returned instead.
 
@@ -152,7 +152,7 @@ class DataCache(metaclass=Singleton):
         self.load_data()
         return self._cache_data.get(key, default)
 
-    def set_data(self, key, value, persist_data=True):
+    def set_data(self, key: str, value, persist_data=True):
         """Sets a KEY/VALUE pair to the persisted data cache.
 
         KEY and VALUE must be pickable. KEY is recomended to be a string.
@@ -233,7 +233,7 @@ class DataCache(metaclass=Singleton):
         """
         return os.path.join(self._base_path, f"{self.get_app_name()}_customcache_{key}")
 
-    def set_password(self, key, password):
+    def set_password(self, key: str, password: str):
         """Saves a value ("password") in the system's encrypted keyring service.
         This is a form of persisted data as well, but stored on the system itself, not on this DataCache.
         It's not foolproof but provides more security for saving sensitive data than the regular data cache (from methods
@@ -254,7 +254,7 @@ class DataCache(metaclass=Singleton):
         else:
             keyring.set_password(self._service_id, user_key, password)
 
-    def delete_password(self, key):
+    def delete_password(self, key: str):
         """Deletes a saved password from the system's encrypted keyring service, that was previously saved with 'set_password'."""
         if self.get_password(key) is not None:
             user_key = self._get_user_key(key)
@@ -268,7 +268,7 @@ class DataCache(metaclass=Singleton):
             else:
                 keyring.delete_password(self._service_id, user_key)
 
-    def get_password(self, key: str):
+    def get_password(self, key: str) -> str | None:
         """Gets a value ("password") from the system's encrypted keyring service, that was saved with 'set_password'."""
         user_key = self._get_user_key(key)
 
