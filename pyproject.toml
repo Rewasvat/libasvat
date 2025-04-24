@@ -24,6 +24,8 @@ dependencies = [
     "keyring",
     "imgui-bundle",
     "debugpy",
+    "google-api-python-client",
+    "google-auth-oauthlib",
 ]
 
 [project.urls]
