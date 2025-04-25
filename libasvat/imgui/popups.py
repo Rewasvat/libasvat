@@ -4,69 +4,73 @@ from libasvat.imgui.math import Vector2
 from libasvat.imgui.colors import Colors
 
 
-class BasePopup:
+class BasePopup[T]:
     """Base class to create a imgui modal popup component.
 
     This should be inherited in order to define your popup, mostly by overriding ``self.draw_contents()``.
     The popup's title (`name`) and initial `size` are set as attributes of this object.
     """
 
-    def __init__(self, name: str, size: Vector2 = None):
-        self.name = name
+    def __init__(self, label: str, title: str, size: Vector2 = None):
+        self.label: str = label
+        self.title: str = title
         self.size: Vector2 = size
-        self.is_visible = False
-        self._perform_open = False
+        self._triggered = False
 
-    def render(self):
-        """Renders this popup.
+    def render(self) -> T | None:
+        """Utility method to call ``self.draw_button()`` and ``self.update()`` together.
 
         While this needs to be called each frame, as any other imgui control, the popup itself will only appear after
         a call to ``self.open()``.
 
-        This returns the value given by ``self.draw_contents()``.
+        Returns:
+            any: the non-None value returned by this popup's ``draw_popup_contents()`` method.
         """
-        if self._perform_open:
-            # NOTE: open_popup needs to be called in the same imgui ID context as its begin_popup.
-            imgui.open_popup(self.name, imgui.PopupFlags_.mouse_button_left)
-            self.is_visible = True
-            self._perform_open = False
-            if self.size is None:
-                self.size = Vector2(*imgui.calc_text_size(self.name)) * (2, 8)
-            imgui.set_next_window_size(self.size)
+        self.draw_button()
+        return self.update()
 
-        result = None
-        if self.data is not None:
-            opened, self.is_visible = imgui.begin_popup_modal(self.name, self.is_visible)
-            if opened:
-                result = self.draw_contents()
-                if not self.is_visible:
-                    imgui.close_current_popup()
-                imgui.end_popup()
+    def update(self) -> T | None:
+        """Renders/updates the window of this popup. This needs to be called each frame.
 
-        return result
+        Returns:
+            any: the non-None value returned by this popup's ``draw_popup_contents()`` method.
+        """
+        result = generic_popup(self._triggered, self.title, self.draw_popup_contents, self.size)
+        self._triggered = False
+        if result is not None:
+            # Popup is opened and was confirmed
+            imgui.close_current_popup()
+            return result
 
-    def render_open_button(self, label: str):
-        """Display a imgui button with the given LABEL, and then renders this popup and returns its result."""
-        if imgui.button(label):
+    def draw_button(self, in_menu=False):
+        """Draws a button with our ``self.label`` that will ``self.open()`` this popup when pressed.
+
+        Args:
+            in_menu (bool, optional): If true, will use a ``imgui.menu_item_simple(label)`` to draw the button,
+                instead of the regular ``imgui.button(label)``. This is for opening the popup inside a imgui menu.
+        """
+        if in_menu:
+            trigger = imgui.menu_item_simple(self.label)
+        else:
+            trigger = imgui.button(self.label)
+        if trigger:
             self.open()
-        return self.render()
-
-    def draw_contents(self):
-        """Draws the internal contents of the popup.
-
-        Value returned by this will be returned by ``self.render()`` to be used by whoever is using this popup object.
-
-        This should be overwritten by subclasses.
-        """
-        pass
 
     def open(self):
-        """Opens the popup."""
-        self._perform_open = True
+        """Opens this popup."""
+        self._triggered = True
 
-    def close(self):
-        """Closes the popup."""
-        self.is_visible = False
+    def draw_popup_contents(self) -> T | None:
+        """Draws the contents of this popup.
+
+        This needs to be overriden by subclasses!
+
+        Returns:
+            any: this value (of any type) should be the "return value" of the modal popup.
+            If this is non-None, our ``self.update()`` will close the popup and return this value, while
+            giving None means doing nothing.
+        """
+        raise NotImplementedError
 
 
 def generic_popup[T](trigger_open: bool, title: str, contents: Callable[[], T], size: Vector2 = None) -> T | None:
