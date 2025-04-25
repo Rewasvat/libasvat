@@ -242,46 +242,51 @@ def button_with_text_input(label: str, title: str, message: str, value: str, val
     return generic_button_with_popup(label, title, contents, size, in_menu)
 
 
-class TextInputPopup:
-    """Imgui utility class to simplify usage of the utility function ``button_with_text_input``.
+class TextInputPopup(BasePopup[str]):
+    """Utility imgui popup class to display a modal popup that allows the user to enter a text string.
 
-    This class simplifies usage of ``button_with_text_input``, particularly when certain parameters of ``button_with_text_input``
-    do not change over time. For this, we store all ``button_with_text_input``'s parameters, and handle storing the selected value.
-    The parameter values are received in the constructor, but may be changed at any time afterwards via their attributes.
+    The popup has a single text-input control, and `Cancel`/`Ok` buttons. Cancel just closes the popup, while Ok
+    will close the popup and return the text value.
 
-    The ``button_with_text_input``, and thus this popup class, displays a `label` button that when pressed opens a modal popup with the its `title`.
+    A optional `validator` callable allows to validate user inputted text. In this case, the Ok button will be enabled
+    only if the select value is valid. The `validator` returns a `(valid: bool, reason: str)` tuple, indicating if
+    the value is valid, and the reason why the value is valid or not. The validity of the value and reason why are
+    displayed in the popup for the user to see.
 
-    The popup displays our `message`, a text input that edits our `value`, and Ok/Cancel buttons.
-    When either button is pressed, the popup is closed. When closing by pressing Ok, the selected value is returned.
-
-    A `validator` can be set to validate the inputted values. When a value is invalid, the `Ok` button is disabled.
+    This is essentially the same as the utility function ``button_with_text_input``, but easier to use.
     """
 
     def __init__(self, label: str, title: str, message: str, initial_value: str = "", validator: Callable[[str], tuple[bool, str]] = None,
                  size: Vector2 = None):
-        self.label = label
-        self.title = title
+        super().__init__(label, title, size)
         self.message = message
         self.value = initial_value
         self.validator = validator
-        self.size = size
 
-    def render(self):
-        """Renders this TextInputPopup using IMGUI.
+    def draw_popup_contents(self):
+        imgui.text_wrapped(self.message)
 
-        Draws a button with our `label` that when pressed opens a modal popup with our `title`.
-        The popup displays our `message`, a text input that edits our `value`, and Ok/Cancel buttons.
+        changed, self.value = imgui.input_text("##", self.value)
+        is_valid = True
+        if self.validator is not None:
+            is_valid, reason = self.validator(self.value)
+            if is_valid:
+                imgui.text_colored(Colors.green, f"Valid: {reason}")
+            else:
+                imgui.push_text_wrap_pos()
+                imgui.text_colored(Colors.red, f"Invalid value: {reason}")
+                imgui.pop_text_wrap_pos()
 
-        If we have a `validator`, it'll be used to validate if the selected value is valid.
+        confirmed = False
+        if imgui.button("Cancel"):
+            imgui.close_current_popup()
+        width = imgui.get_content_region_avail().x
+        imgui.same_line(width - 30)
+        imgui.begin_disabled(not is_valid)
+        if imgui.button("Ok"):
+            confirmed = True
+            imgui.close_current_popup()
+        imgui.end_disabled()
 
-        Returns:
-            str | None: The user's selected string value, if it's valid. The string is returned in the single frame
-            when `Ok` was pressed. Otherwise returns None.
-        """
-        result = button_with_text_input(self.label, self.title, self.message, self.value, self.validator, self.size)
-        if result is not None:
-            # Popup is opened
-            confirmed, new_value = result
-            self.value = new_value
-            if confirmed:
-                return self.value
+        if confirmed:
+            return self.value
