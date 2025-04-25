@@ -109,7 +109,7 @@ def generic_popup[T](trigger_open: bool, title: str, contents: Callable[[], T], 
     return result
 
 
-def generic_button_with_popup[T](label: str, title: str, contents: Callable[[], T], size: Vector2 = None) -> T | None:
+def generic_button_with_popup[T](label: str, title: str, contents: Callable[[], T], size: Vector2 = None, in_menu=False) -> T | None:
     """Imgui utility to display a button with the given `label`, that when pressed will open a GENERIC popup.
 
     The popup is a simple modal popup, meaning it displays as a overlay on top of everything else,
@@ -127,11 +127,16 @@ def generic_button_with_popup[T](label: str, title: str, contents: Callable[[], 
         title (str): Title of the popup window. Ideally, this should be unique between popups in the same Imgui context.
         contents (callable() -> T): Callable that when executed will draw (using imgui) the popup's contents.
         size (Vector2, optional): Initial size of the popup window when opened. Defaults to the title's size x(2, 8).
+        in_menu (bool, optional): If this is being called inside a imgui menu. If true, we'll use ``imgui.menu_item_simple(label)``
+            to draw the button for user interaction, otherwise the default ``imgui.button(label)`` will be used.
 
     Returns:
         T: the value returned by the ``contents()`` function, or None if the popup isn't opened.
     """
-    trigger = imgui.button(label)
+    if in_menu:
+        trigger = imgui.menu_item_simple(label)
+    else:
+        trigger = imgui.button(label)
     return generic_popup(trigger, title, contents, size)
 
 
@@ -179,7 +184,7 @@ def button_with_confirmation(label: str, title: str, message: str, size: Vector2
 
 
 def button_with_text_input(label: str, title: str, message: str, value: str, validator: Callable[[str], tuple[bool, str]] = None,
-                           size: Vector2 = None):
+                           size: Vector2 = None, in_menu=False):
     """Imgui utility to display a `label` button that when pressed opens a modal popup with the given `title`.
 
     The popup displays the `message`, a text input that edits the `value`, and Ok/Cancel buttons.
@@ -193,9 +198,11 @@ def button_with_text_input(label: str, title: str, message: str, value: str, val
         message (str): Message to display inside the popup.
         value (str): the current value of the text input for the user's selection.
         validator (Callable[[str], tuple[bool, str]], optional): A optional callable that validates the selected `value`.
-        It receives the `value` as arg, and should return a `(valid, reason)` tuple, where `valid` is a boolean indicating if the
-        `value` is valid, and `reason` is a string indication why the value is valid or invalid. Defaults to None.
+            It receives the `value` as arg, and should return a `(valid, reason)` tuple, where `valid` is a boolean indicating if the
+            `value` is valid, and `reason` is a string indication why the value is valid or invalid. Defaults to None.
         size (Vector2, optional): Initial size of the popup window when opened. Defaults to the title's size x(4, 16).
+        in_menu (bool, optional): If this is being called inside a imgui menu. If true, we'll use ``imgui.menu_item_simple(label)``
+            to draw the button for user interaction, otherwise the default ``imgui.button(label)`` will be used.
 
     Returns:
         tuple[bool, str]: a (`confirmed`, `value`) tuple. Where `confirmed` indicates if the popup was closed by pressing `Ok`
@@ -228,7 +235,7 @@ def button_with_text_input(label: str, title: str, message: str, value: str, val
         imgui.end_disabled()
         return confirmed, new_value
 
-    return generic_button_with_popup(label, title, contents, size)
+    return generic_button_with_popup(label, title, contents, size, in_menu)
 
 
 class TextInputPopup:
