@@ -318,6 +318,70 @@ def create_tag(tag_name, push=True, verbose=False):
         git("push", "origin", tag_name, output=not verbose)
 
 
+def get_repo_name(path: str = None):
+    """Gets the name of the repository located at the given path.
+
+    Args:
+        path (str, optional): Path to check repository name. Defaults to None, which means
+            checking the current working directory. The path can be the repository's root
+            folder path, or any subdirectory inside the repository.
+
+    Returns:
+        str: the name of the repository: this is the `name` part of the repo's URL (`git@host:user/name.git`).
+        If the given `path` is not a valid git repository, this returns None.
+    """
+    if (path is not None) and (not os.path.isdir(path)):
+        return
+    result = git("remote", "get-url", "origin", output=True, dont_check=True, cwd=path)
+    if result.returncode == 0:
+        url = result.stdout.strip()
+        # URL should be in the format `git@host:user/repoName.git`
+        return url.split("/")[-1].replace(".git", "")
+
+
+def is_repository(repo_path: str, expected_name: str = None):
+    """Checks if a given path is a valid Git repository folder (or is inside a repository).
+
+    Args:
+        repo_path (str): Path to check repository name. Defaults to None, which means
+            checking the current working directory. The path can be the repository's root
+            folder path, or any subdirectory inside the repository.
+        expected_name (str, optional): Optional expected name of the repository to check for.
+            If this not-None, the checked repository's name is compared to this expected-name,
+            and this method will only return True if they match.
+
+    Returns:
+        bool: indicates if the given path is a repository, False otherwise. If `expected_name`
+        was given, this will only be True if the given path is a repository whose name matches
+        the expected-name.
+    """
+    repo_name = get_repo_name(repo_path)
+    if repo_name is None:
+        return False
+    if expected_name is not None:
+        return repo_name == expected_name
+    return True
+
+
+def get_root_repository_path(path: str = None):
+    """Gets the path to the root of the repository in the given path.
+
+    Args:
+        path (str): Path to check repository root. Defaults to None, which means
+            checking the current working directory.
+
+    Returns:
+        str: The absolute path to the local repository's root folder. Returns None if the given
+        `path` is not a (or in a) repository. This return value (when valid) will always be a prefix
+        of the given `path` (when in absolute path notation).
+    """
+    if (path is not None) and (not os.path.isdir(path)):
+        return
+    result = git("rev-parse", "--show-toplevel", output=True, dont_check=True, cwd=path)
+    if result.returncode == 0:
+        return result.stdout.strip()
+
+
 class Repository:
     """Utility class to represent a Git repository and simplify its usage.
 
