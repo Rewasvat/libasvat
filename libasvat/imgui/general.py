@@ -313,8 +313,9 @@ def simple_table(table_id: str, columns: dict[str, Callable[[str], None]], weigh
 
     Args:
         table_id (str): internal IMGUI ID for this table.
-        columns (dict[str, Callable[[str], None]]): A `{column_name: render_method}` table, where COLUMN_NAME is the name for that column, and RENDER_METHOD
-            is a `method(column_name) -> None` method that is called to draw the contents of that column, and receives the `column_name` string.
+        columns (dict[str, Callable[[str], None]]): A `{column_name: render_method}` table, where COLUMN_NAME is the name for that column, and
+            RENDER_METHOD is a `method(column_name) -> None` method that is called to draw the contents of that column, and receives
+            the `column_name` string.
         weights (dict[str, int], optional): Optional `{column_name: weight}` table to indicate initial width weights for each column. If given,
             the table's width will be divided amongst the columns with these weights. Columns can still be resized by the user during runtime.
     """
