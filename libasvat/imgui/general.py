@@ -353,3 +353,28 @@ def button_with_tooltip(label: str, tooltip: str):
     pressed = imgui.button(label)
     imgui.set_item_tooltip(tooltip)
     return pressed
+
+
+def adv_button(label: str, tooltip: str = None, is_enabled=True):
+    """Utility to draw a "advanced button": a IMGUI button, optionally using other IMGUI features along with it.
+
+    Args:
+        label (str): Button label.
+        tooltip (str, optional): Optional tooltip description of this button (uses ``imgui.set_item_tooltip()``).
+        is_enabled (bool, optional): Optional flag indicating if this button is enabled. If false, this uses
+            ``imgui.begin/end_disabled()`` to 'disable' the button according to the theme being used.
+
+    Returns:
+        bool: if button was pressed
+    """
+    if not is_enabled:
+        # begin_disabled() could receive "not is_enabled" directly as a arg to disable or not the imgui widgets.
+        # But doing it this way is slightly more efficient, and we can afford this extra IF checks here since this
+        # is a utility function.
+        imgui.begin_disabled()
+    pressed = imgui.button(label)
+    if tooltip is not None:
+        imgui.set_item_tooltip(tooltip)
+    if not is_enabled:
+        imgui.end_disabled()
+    return pressed
