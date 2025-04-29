@@ -6,7 +6,7 @@ from enum import Enum
 from imgui_bundle import imgui
 from libasvat.imgui.math import Vector2
 from libasvat.imgui.colors import Color, Colors
-from libasvat.imgui.general import enum_drop_down, drop_down
+from libasvat.imgui.general import enum_drop_down, drop_down, adv_button
 from libasvat.utils import get_all_properties, AdvProperty, adv_property
 
 
@@ -337,12 +337,12 @@ class TypeEditor:
         * Another example, if original is ``dict[K,V]``, subtypes will be ``(K,V)`` while value-type is ``dict``.
         * For a union type, the subtypes is a tuple of all types in the union.
         """
-        self.attr_doc = config.get("doc", "")
+        self.attr_doc: str = config.get("doc", "")
         """The value's docstring, usually used as a tooltip when editing to explain that value.
 
         When TypeEditor is created from a imgui-property, by default this value is the property's docstring.
         """
-        self.add_tooltip_after_value = True
+        self.add_tooltip_after_value: bool = True
         """If true, this will add ``self.attr_doc`` as a tooltip for the last imgui control drawn."""
         self.color: Color = Color(0.2, 0.2, 0.6, 1)
         """Color of this type. Mostly used by DataPins of this type in Node Systems."""
@@ -356,7 +356,7 @@ class TypeEditor:
         This is usually used together with ``self.convert_value_to_type`` to ensure the input value is converted
         to this type.
         """
-        self.convert_value_to_type = False
+        self.convert_value_to_type: bool = False
         """If the value we receive should be converted to our ``value_type`` before using. This is done using
         ``self.value_type(value)``, like most basic python types accept."""
 
@@ -379,16 +379,28 @@ class TypeEditor:
             If so, the new value was set in the object automatically.
         """
         self.update_from_obj(obj, name)
+        can_draw_value = self.draw_header(obj, name)
+
+        changed = False
+        if can_draw_value:
+            value = getattr(obj, name)
+            value = self._check_value_type(value)
+            changed, new_value = self.render_value_editor(value)
+            if changed:
+                setattr(obj, name, new_value)
+
+        self.draw_footer(obj, name, can_draw_value)
+        return changed
+
+    def draw_header(self, obj, name: str) -> bool:
+        """TODO"""
         imgui.text(f"{name}:")
         imgui.set_item_tooltip(self.attr_doc)
         imgui.same_line()
+        return True
 
-        value = getattr(obj, name)
-        value = self._check_value_type(value)
-        changed, new_value = self.render_value_editor(value)
-        if changed:
-            setattr(obj, name, new_value)
-        return changed
+    def draw_footer(self, obj, name: str, header_ok: bool):
+        """TODO"""
 
     def render_value_editor[T](self, value: T) -> tuple[bool, T]:
         """Renders the controls for editing a value of type T, which should be the type expected by this TypeEditor instance.
@@ -720,72 +732,84 @@ def color_property(flags: imgui.ColorEditFlags_ = imgui.ColorEditFlags_.none):
 class ListEditor(TypeEditor):
     """Imgui TypeEditor for editing a LIST value."""
 
-    def __init__(self, config: dict, item_editor: TypeEditor, default_item=None):
+    def __init__(self, config: dict):
         super().__init__(config)
-        self.default_item = default_item
-        self.item_editor = item_editor
-        item_editor.value_getter = lambda obj, i: obj[i]
+        self.add_tooltip_after_value = False
+        self.convert_value_to_type = True
+        self.extra_accepted_input_types = tuple | set
+        self.color = Colors.yellow
+        # List editor attributes
+        self.min_items: int = config.get("min_items", 0)
+        """Minimum number of items in the list. If the list has less than this, it will be automatically filled with default values."""
+        self.max_items: int = config.get("max_items", None)
+        """Maximum number of items in the list. If the list has more than this, it will be automatically trimmed to this size.
+        If None, there is no maximum."""
+        self.item_config: dict = config.get("item_config", {})
+        """Configuration for the item's TypeEditor."""
 
-        def item_setter(obj, i, item):
-            obj[i] = item
-        item_editor.value_setter = item_setter
-
-    def __call__(self, obj, name: str):
-        changed = False
-        value = self.value_getter(obj, name)
-        if self.draw_start(obj, name):
-            changed, value = self.draw_value_editor(obj, name, value)
-            self.draw_end(obj, name, changed, value)
-        return changed, value
-
-    def draw_start(self, obj, name: str):
-        self.update_from_obj(obj, name)
-        opened = imgui.tree_node(f"{obj}EditAttr{name}", f"{name} ({len(self.value_getter(obj, name))} items)")
+    def draw_header(self, obj, name):
+        opened = imgui.tree_node(name)
         imgui.set_item_tooltip(self.attr_doc)
         return opened
 
-    def draw_value_editor(self, obj, name: str, value: list):
+    def draw_footer(self, obj, name, header_ok):
+        if header_ok:
+            imgui.tree_pop()
+
+    def draw_value_editor(self, value: list):
+        if value is None:
+            value = []
         changed = False
-        size = len(value)
-        for i in range(size):
-            if i >= len(value):
-                break  # required since the X button might remove a item, changing the size of value.
-            item = value[i]
-            # "start" part
-            imgui.push_id(f"{obj}EditAttr{name}ListItem{i}")
-            imgui.text(f"#{i}:")
+        item_type = self.value_subtypes[0]
+        num_items = len(value)
+        # Update list if has less than minimun itens.
+        if num_items < self.min_items:
+            for i in range(self.min_items - num_items):
+                value.append(item_type())
+            num_items = self.min_items
+            changed = True
+        # Update list if has more than maximum itens.
+        if num_items > self.max_items:
+            value = value[:self.max_items]
+            num_items = self.max_items
+            changed = True
+        # Render editor for each item
+        can_remove = num_items <= self.min_items
+        remove_help = "Removes this item from the list."
+        up_help = "Moves this item up in the list: changes position of this item with the previous item."
+        down_help = "Moves this item down in the list: changes position of this item with the next item."
+        for i in range(num_items):
+            # Handle X button to remove item.
+            if adv_button("X", tooltip=remove_help, is_enabled=can_remove):
+                # TODO: X button pra remover
+                pass
+            # Handle up/down buttons to change order of items.
             imgui.same_line()
-            # item value editing
-            item_changed, new_item = self.item_editor.draw_value_editor(obj, name, item)
-            # item handling (move/delete)
-            imgui.same_line()
-            if imgui.button("^") and i >= 1:
-                value[i-1], value[i] = value[i], value[i-1]
-                item_changed = False
+            if adv_button("^", tooltip=up_help, is_enabled=(i > 0)):
+                value[i], value[i - 1] = value[i - 1], value[i]
                 changed = True
             imgui.same_line()
-            if imgui.button("v") and i < size-1:
-                value[i], value[i+1] = value[i+1], value[i]
-                item_changed = False
+            if adv_button("v", tooltip=down_help, is_enabled=(i < num_items - 1)):
+                value[i], value[i + 1] = value[i + 1], value[i]
                 changed = True
             imgui.same_line()
-            if imgui.button("X"):
-                value.pop(i)
-                item_changed = True
-            # "end" part
-            elif item_changed:
-                value[i] = new_item
-            changed = changed or item_changed
-            imgui.pop_id()
-        if imgui.button("Add Item"):
-            value.append(self.default_item)
+            # Handle item editor.
+            item_editor = TypeDatabase().get_editor(item_type, self.item_config)
+            if item_editor:
+                item = value[i]
+                item_changed, new_item = item_editor.render_value_editor(item)
+                if item_changed:
+                    value[i] = new_item
+                    changed = True
+            else:
+                pass
+        # Handle button to add more itens.
+        can_add = (self.max_items is None) or (len(value) < self.max_items)
+        add_help = "Adds a new default item to the list. The item can then be edited."
+        if adv_button("Add Item", tooltip=add_help, is_enabled=can_add):
+            value.append(item_type())
             changed = True
         return changed, value
-
-    def draw_end(self, obj, name: str, changed: bool, new_value: list):
-        if changed:
-            self.value_setter(obj, name, new_value)
-        imgui.tree_pop()
 
 
 @TypeDatabase.register_editor_for_type(Vector2)
