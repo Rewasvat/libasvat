@@ -3,7 +3,7 @@ import typing
 import inspect
 import libasvat.command_utils as cmd_utils
 from enum import Enum
-from imgui_bundle import imgui
+from imgui_bundle import imgui, imgui_ctx
 from libasvat.imgui.math import Vector2
 from libasvat.imgui.colors import Color, Colors
 from libasvat.imgui.general import enum_drop_down, drop_down, adv_button
@@ -780,29 +780,33 @@ class ListEditor(TypeEditor):
         down_help = "Moves this item down in the list: changes position of this item with the next item."
         for i in range(num_items):
             # Handle X button to remove item.
-            if adv_button("X", tooltip=remove_help, is_enabled=can_remove):
-                # TODO: X button pra remover
-                pass
-            # Handle up/down buttons to change order of items.
-            imgui.same_line()
-            if adv_button("^", tooltip=up_help, is_enabled=(i > 0)):
-                value[i], value[i - 1] = value[i - 1], value[i]
-                changed = True
-            imgui.same_line()
-            if adv_button("v", tooltip=down_help, is_enabled=(i < num_items - 1)):
-                value[i], value[i + 1] = value[i + 1], value[i]
-                changed = True
-            imgui.same_line()
-            # Handle item editor.
-            item_editor = TypeDatabase().get_editor(item_type, self.item_config)
-            if item_editor:
-                item = value[i]
-                item_changed, new_item = item_editor.render_value_editor(item)
-                if item_changed:
-                    value[i] = new_item
+            if i >= len(num_items):
+                # Since we can remove an item (see below), the list size can change in this loop.
+                # So we check to be sure.
+                break
+            with imgui_ctx.push_id(f"{repr(value)}#{i}"):
+                if adv_button("X", tooltip=remove_help, is_enabled=can_remove):
+                    value.pop(i)
+                # Handle up/down buttons to change order of items.
+                imgui.same_line()
+                if adv_button("^", tooltip=up_help, is_enabled=(i > 0)):
+                    value[i], value[i - 1] = value[i - 1], value[i]
                     changed = True
-            else:
-                pass
+                imgui.same_line()
+                if adv_button("v", tooltip=down_help, is_enabled=(i < num_items - 1)):
+                    value[i], value[i + 1] = value[i + 1], value[i]
+                    changed = True
+                imgui.same_line()
+                # Handle item editor.
+                item_editor = TypeDatabase().get_editor(item_type, self.item_config)
+                item = value[i]
+                if item_editor:
+                    item_changed, new_item = item_editor.render_value_editor(item)
+                    if item_changed:
+                        value[i] = new_item
+                        changed = True
+                else:
+                    imgui.text_colored(Colors.red, f"Can't edit item '{item}'")
         # Handle button to add more itens.
         can_add = (self.max_items is None) or (len(value) < self.max_items)
         add_help = "Adds a new default item to the list. The item can then be edited."
