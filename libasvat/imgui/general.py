@@ -344,6 +344,8 @@ def simple_table(table_id: str, columns: dict[str, Callable[[str], None]], weigh
 def button_with_tooltip(label: str, tooltip: str):
     """Utility to draw a IMGUI button with the given tooltip.
 
+    DEPRECATED! Use `adv_button()` instead.
+
     Args:
         label (str): button label
         tooltip (str): tooltip description
@@ -351,9 +353,7 @@ def button_with_tooltip(label: str, tooltip: str):
     Returns:
         bool: if button was pressed
     """
-    pressed = imgui.button(label)
-    imgui.set_item_tooltip(tooltip)
-    return pressed
+    return adv_button(label, tooltip=tooltip)
 
 
 def adv_button(label: str, tooltip: str = None, is_enabled=True):
