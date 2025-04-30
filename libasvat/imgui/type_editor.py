@@ -532,10 +532,10 @@ def string_property(flags: imgui.InputTextFlags_ = 0, options: list[str] = None,
     Args:
         flags (imgui.InputTextFlags_, optional): flags to pass along to ``imgui.input_text``. Defaults to None.
         options (list[str]): List of possible values for this string property. If given, the editor control changes to a drop-down
-        allowing the user to select only these possible values.
+            allowing the user to select only these possible values.
         docs (list | dict, optional): Optional definition of documentation for each option, shown as a tooltip (for that option) in the editor.
-        Should be a ``list[str]`` matching the length of ``options``, or a ``{option: doc}`` dict. The property's docstring is used as a default
-        tooltip for all options.
+            Should be a ``list[str]`` matching the length of ``options``, or a ``{option: doc}`` dict. The property's docstring is used as a default
+            tooltip for all options.
         option_flags (imgui.SelectableFlags_, optional): Flags passed down to the drop-down selectable.
     """
     return imgui_property(flags=flags, options=options, docs=docs, option_flags=option_flags)
@@ -598,10 +598,10 @@ class FloatEditor(TypeEditor):
             min (float, optional): Minimum allowed value for this float property. Defaults to 0.0.
             max (float, optional): Maximum allowed value for this float property. Defaults to 0.0. If MIN >= MAX then we have no bounds.
             format (str, optional): Text format of the value to decorate the control with. Defaults to "%.2f". Apparently this needs to be a valid
-            python format, otherwise the float control wont work properly.
+                python format, otherwise the float control wont work properly.
             speed (float, optional): Speed to apply when changing values. Only applies when dragging the value and IS_SLIDER=False. Defaults to 1.0.
             is_slider (bool, optional): If we'll use a SLIDER control for editing. It contains a marker indicating the value along the range between
-            MIN<MAX (if those are valid). Otherwise defaults to using a ``drag_float`` control. Defaults to False.
+                MIN<MAX (if those are valid). Otherwise defaults to using a ``drag_float`` control. Defaults to False.
             flags (imgui.SliderFlags_, optional): Flags for the Slider/Drag float controls. Defaults to imgui.SliderFlags_.none.
         """
         super().__init__(config)
@@ -642,10 +642,10 @@ def float_property(min=0.0, max=0.0, format="%.2f", speed=1.0, is_slider=False, 
         min (float, optional): Minimum allowed value for this float property. Defaults to 0.0.
         max (float, optional): Maximum allowed value for this float property. Defaults to 0.0. If MIN >= MAX then we have no bounds.
         format (str, optional): Text format of the value to decorate the control with. Defaults to "%.3". Apparently this needs to be a valid
-        python format, otherwise the float control wont work properly.
+            python format, otherwise the float control wont work properly.
         speed (float, optional): Speed to apply when changing values. Only applies when dragging the value and IS_SLIDER=False. Defaults to 1.0.
         is_slider (bool, optional): If we'll use a SLIDER control for editing. It contains a marker indicating the value along the range between
-        MIN<MAX (if those are valid). Otherwise defaults to using a ``drag_float`` control. Defaults to False.
+            MIN<MAX (if those are valid). Otherwise defaults to using a ``drag_float`` control. Defaults to False.
         flags (imgui.SliderFlags_, optional): Flags for the Slider/Drag float controls. Defaults to imgui.SliderFlags_.none.
     """
     return imgui_property(min=min, max=max, format=format, speed=speed, is_slider=is_slider, flags=flags)
@@ -661,10 +661,10 @@ class IntEditor(TypeEditor):
             min (int, optional): Minimum allowed value for this int property. Defaults to 0.
             max (int, optional): Maximum allowed value for this int property. Defaults to 0. If MIN >= MAX then we have no bounds.
             format (str, optional): Text format of the value to decorate the control with. Defaults to "%d". Apparently this needs to be a valid
-            python format, otherwise the int control wont work properly.
+                python format, otherwise the int control wont work properly.
             speed (float, optional): Speed to apply when changing values. Only applies when dragging the value and IS_SLIDER=False. Defaults to 1.0.
             is_slider (bool, optional): If we'll use a SLIDER control for editing. It contains a marker indicating the value along the range between
-            MIN<MAX (if those are valid). Otherwise defaults to using a ``drag_int`` control. Defaults to False.
+                MIN<MAX (if those are valid). Otherwise defaults to using a ``drag_int`` control. Defaults to False.
             flags (imgui.SliderFlags_, optional): Flags for the Slider/Drag int controls. Defaults to imgui.SliderFlags_.none.
         """
         super().__init__(config)
@@ -705,10 +705,10 @@ def int_property(min=0, max=0, format="%d", speed=1, is_slider=False, flags: img
         min (int, optional): Minimum allowed value for this int property. Defaults to 0.
         max (int, optional): Maximum allowed value for this int property. Defaults to 0. If MIN >= MAX then we have no bounds.
         format (str, optional): Text format of the value to decorate the control with. Defaults to "%d". Apparently this needs to be a valid
-        python format, otherwise the int control wont work properly.
+            python format, otherwise the int control wont work properly.
         speed (float, optional): Speed to apply when changing values. Only applies when dragging the value and IS_SLIDER=False. Defaults to 1.
         is_slider (bool, optional): If we'll use a SLIDER control for editing. It contains a marker indicating the value along the range between
-        MIN<MAX (if those are valid). Otherwise defaults to using a ``drag_int`` control. Defaults to False.
+            MIN<MAX (if those are valid). Otherwise defaults to using a ``drag_int`` control. Defaults to False.
         flags (imgui.SliderFlags_, optional): Flags for the Slider/Drag int controls. Defaults to imgui.SliderFlags_.none.
     """
     return imgui_property(min=min, max=max, format=format, speed=speed, is_slider=is_slider, flags=flags)
