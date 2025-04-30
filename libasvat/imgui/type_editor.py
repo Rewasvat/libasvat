@@ -758,8 +758,9 @@ class ListEditor(TypeEditor):
         self.max_items: int = config.get("max_items", None)
         """Maximum number of items in the list. If the list has more than this, it will be automatically trimmed to this size.
         If None, there is no maximum."""
-        self.item_config: dict = config.get("item_config", {})
-        """Configuration for the item's TypeEditor."""
+        item_config: dict = config.get("item_config", {})
+        self.item_editor: TypeEditor = TypeDatabase().get_editor(self.value_subtypes[0], item_config)
+        """TypeEditor for the items in the list. This is used to edit each item in the list."""
 
     def draw_header(self, obj, name):
         opened = imgui.tree_node(name)
@@ -812,10 +813,9 @@ class ListEditor(TypeEditor):
                     changed = True
                 imgui.same_line()
                 # Handle item editor.
-                item_editor = TypeDatabase().get_editor(item_type, self.item_config)
                 item = value[i]
-                if item_editor:
-                    item_changed, new_item = item_editor.render_value_editor(item)
+                if self.item_editor:
+                    item_changed, new_item = self.item_editor.render_value_editor(item)
                     if item_changed:
                         value[i] = new_item
                         changed = True
@@ -828,6 +828,21 @@ class ListEditor(TypeEditor):
             value.append(item_type())
             changed = True
         return changed, value
+
+
+def list_property(min_items: int = 0, max_items: int = None, item_config: dict[str, any] = None):
+    """Imgui Property attribute for a LIST type.
+
+    Behaves the same way as a property, but includes a ListEditor object for allowing changing this list's items in imgui.
+
+    Args:
+        min_items (int, optional): minimum number of items in the list. If the list has less than this, it will be automatically
+            filled with default values. Defaults to 0.
+        max_items (int, optional): maximum number of items in the list. If the list has more than this, it will be automatically
+            trimmed to this size. If None (the default), there is no maximum.
+        item_config (dict[str, any], optional): Configuration for the item's TypeEditor. This is passed to the TypeEditor constructor.
+    """
+    return imgui_property(min_items=min_items, max_items=max_items, item_config=item_config)
 
 
 @TypeDatabase.register_editor_for_type(Vector2)
@@ -1006,7 +1021,7 @@ class ObjectEditor(TypeEditor):
         if value is None:
             value = self.value_type()
             changed = True
-        props = types.get_all_renderable_properties(type(value))
+        props = get_all_renderable_properties(type(value))
         ignored_props = self.get_ignored_properties(value)
         for name, prop in props.items():
             if name not in ignored_props:
