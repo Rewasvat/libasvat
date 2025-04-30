@@ -122,6 +122,20 @@ class TypeDatabase(metaclass=cmd_utils.Singleton):
             return type_cls
         return decorator
 
+    @classmethod
+    def register_editor_class_for_this(cls, editor_cls: type['TypeEditor'], is_creatable=True):
+        """[DECORATOR] Registers the given TypeEditor class as a editor for the decorated class.
+
+        Args:
+            editor_cls (type[TypeEditor]): TypeEditor class to register as editor for the decorated class.
+            is_creatable (bool, optional): If this type, with the given editor class, will be creatable via editor. Defaults to True.
+        """
+        def decorator(type_cls):
+            db = cls()
+            db.add_type_editor(type_cls, editor_cls, is_creatable)
+            return type_cls
+        return decorator
+
 
 class ImguiProperty(AdvProperty):
     """IMGUI Property: an Advanced Property that associates a TypeEditor with the property.
