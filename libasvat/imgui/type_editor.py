@@ -948,6 +948,91 @@ class UnionEditor(TypeEditor):
         return list(self.subeditors.keys())[0]  # defaults to first subtype
 
 
+class ObjectEditor(TypeEditor):
+    """Specialized TypeEditor for a generic custom-class object.
+
+    This editor class can be used to edit any custom class that has renderable (ImGuiProperty) properties.
+    It will automatically find all the properties of the object and render them using their respective editors.
+
+    The editor will also call the optional ``_editor_after_render(editor)`` method of the object after rendering
+    all the properties, passing on the editor instance as the only argument. This method can be used to perform
+    any additional custom "editor" logic after the properties have been rendered.
+
+    The objects edited by this editor can also have an optional method called ``_editor_get_ignored_properties(editor)``
+    that receives the editor instance as the only argument. This method should return a list of property names that
+    should be ignored when rendering the editor. If the ignored properties are known beforehand/fixed, this editor's
+    can be configured with an ``ignored_properties`` attribute, which is a list of property names to ignore, instead
+    of using the ``_editor_get_ignored_properties`` method.
+    """
+
+    def __init__(self, config: dict):
+        super().__init__(config)
+        self.add_tooltip_after_value = False
+        self.convert_value_to_type = config.get("convert_value", False)
+        self.extra_accepted_input_types = config.get("accepted_input_types", None)
+        self.color = config.get("color", Colors.blue)
+        # Attributes
+        self.use_bullet_points: bool = config.get("use_bullet_points", False)
+        """If the editor should use bullet points for each property of the object we're editing. Default is False."""
+        self.ignored_properties: list[str] = config.get("ignored_properties", None)
+        """List of properties (by their names) of the object we're editing that should be ignored
+        when rendering the editor."""
+
+    def draw_header(self, obj, name):
+        opened = imgui.tree_node(name)
+        imgui.set_item_tooltip(self.attr_doc)
+        return opened
+
+    def draw_footer(self, obj, name, header_ok):
+        if header_ok:
+            imgui.tree_pop()
+
+    def draw_value_editor(self, value):
+        changed = False
+        if value is None:
+            value = self.value_type()
+            changed = True
+        props = types.get_all_renderable_properties(type(value))
+        ignored_props = self.get_ignored_properties(value)
+        for name, prop in props.items():
+            if name not in ignored_props:
+                if self.use_bullet_points:
+                    imgui.bullet()
+                    imgui.same_line()
+                changed = prop.render_editor(value) or changed
+
+        updater_method_name = "_editor_after_render"
+        method = getattr(value, updater_method_name, None)
+        if method is not None:
+            method(self)
+
+        return changed, value
+
+    def get_ignored_properties(self, obj) -> list[str]:
+        """Gets the ignored properties of the object we're editing.
+
+        This method is called when this editor is drawn, and it does the following logic to
+        determine the ignored properties:
+        * If the editor's ``ignored_properties`` attribute (from the editor config) is not None, it returns it.
+        By default, this attribute is None.
+        * If the object we're editing has a ``_editor_get_ignored_properties`` method, it is called passing `self`
+        (this editor object) as the only argument. The method's return value is expected to be the list of ignored
+        properties. If this return value is falsy, an empty list is returned.
+        * If none of the above conditions are met, we default to returning an empty list.
+
+        Returns:
+            list[str]: list of property names to ignore when rendering the editor.
+        """
+        if self.ignored_properties is None:
+            updater_method_name = "_editor_get_ignored_properties"
+            method = getattr(obj, updater_method_name, None)
+            if method is not None:
+                return method(self) or []
+            else:
+                return []
+        return self.ignored_properties
+
+
 def get_all_renderable_properties(cls: type) -> dict[str, ImguiProperty]:
     """Gets all "Imgui Properties" of a class. This includes properties of parent classes.
 
