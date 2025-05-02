@@ -249,6 +249,8 @@ class FontDatabase(metaclass=cmd_utils.Singleton):
             font (FontID): font ID to set up an alias to.
             alias (str): new custom made font-ID. A alias can only point to one single font.
         """
+        font = FontID(font)
+        alias = FontID(alias)
         prev_cache = self.get_cache(alias)
         if prev_cache:
             prev_cache.aliases.remove(alias)
@@ -272,6 +274,7 @@ class FontDatabase(metaclass=cmd_utils.Singleton):
         """
         if font is None:
             font = self.default_font
+        font = FontID(font)
         font = self._aliases.get(font, font)
         return self.fonts.get(font, None)
 
