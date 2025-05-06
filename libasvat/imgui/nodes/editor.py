@@ -1,5 +1,5 @@
 from typing import Callable
-from libasvat.imgui.colors import Colors
+from libasvat.imgui.colors import Colors, Color
 from libasvat.imgui.general import menu_item, object_creation_menu
 from libasvat.imgui.nodes.nodes import Node, NodePin, NodeLink, PinKind
 from imgui_bundle import imgui, imgui_node_editor  # type: ignore
@@ -52,6 +52,20 @@ class NodeSystem:
         self._selected_menu_node: Node = None
         self._selected_menu_pin: NodePin = None
         self._selected_menu_link: NodeLink = None
+        self.link_option_ok_hightlight: Color = Colors.green
+        """Color to highlight pins that accept linking to the pin the user is dragging a link from.
+
+        When a user drags a link from a pin, this color will be used to highlight all pins that can be linked to the pin the user is dragging from.
+
+        If None, then no highlight will be shown. Defaults to green.
+        """
+        self.link_option_invalid_hightlight: Color = None
+        """Color to highlight pins that do not accept linking to the pin the user is dragging a link from.
+
+        When a user drags a link from a pin, this color will be used to highlight all pins that cannot be linked to the pin the user is dragging from.
+
+        If None, then no highlight will be shown. Defaults to None.
+        """
 
     def add_node(self, node: Node):
         """Adds a node to this NodeSystem. This will show the node in the editor, and allow it to be edited/updated.
@@ -222,6 +236,14 @@ class NodeSystem:
                 new_pin = self.find_pin(new_pin_id)
                 if new_pin is not None:
                     self.show_label("Create Node (linked as possible to this pin)")
+                    # Check and set pin highlights for linking
+                    for node in self.nodes:
+                        all_pins = node.get_input_pins() + node.get_output_pins()
+                        for pin in all_pins:
+                            if new_pin.can_link_to(pin)[0]:
+                                pin.highlight_color = self.link_option_ok_hightlight
+                            else:
+                                pin.highlight_color = self.link_option_invalid_hightlight
 
                 if imgui_node_editor.accept_new_item():
                     imgui_node_editor.suspend()
