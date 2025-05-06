@@ -459,7 +459,6 @@ PinKind = imgui_node_editor.PinKind
 """Alias for ``imgui_node_editor.PinKind``: enumeration of possible pin kinds."""
 
 
-# TODO: highlight pins (across all nodes) that can be connected to when pulling a new link.
 class NodePin:
     """An Input or Output Pin in a Node.
 
@@ -489,6 +488,21 @@ class NodePin:
         When true, some characters in the name (such as ``_``) are replaced by spaces, and all words are capitalized.
         This DOES NOT change our ``self.pin_name`` attribute. It merely changes how the pin_name is drawn.
         """
+        self.highlight_color: Color = None
+        """Highlight color for this pin.
+
+        When set (not None), the pin's area will be highlighted with this color, and then the color will be set to None.
+        Thus to keep the pin highlighted over time, this attribute needs to be set every frame.
+
+        The highlight consists of drawing the pin's area with this color. First as a filled rect with 20% alpha of this
+        color, then as a outline rect with this color.
+        """
+        self.pin_area: Rectangle = Rectangle()
+        """Rect area of this pin.
+
+        It contains the pin's contents, and is equal to the area used for highlighting the pin when hovered.
+        This is updated every frame after drawing the pin.
+        """
 
     def draw_node_pin(self):
         """Draws this pin. This should be used inside a node drawing context.
@@ -497,6 +511,12 @@ class NodePin:
         """
         imgui_node_editor.begin_pin(self.pin_id, self.pin_kind)
         imgui.begin_horizontal(f"{repr(self)}NodePin")
+        if self.highlight_color:
+            rounding = imgui_node_editor.get_style().pin_rounding
+            self.pin_area.draw(self.highlight_color.alpha_copy(0.2), is_filled=True, rounding=rounding)
+            self.pin_area.draw(self.highlight_color, rounding=rounding)
+            self.highlight_color = None
+
         name = self.pin_name
         if self.prettify_name:
             name = " ".join(s.capitalize() for s in name.split("_"))
@@ -509,6 +529,9 @@ class NodePin:
             imgui.text_unformatted(name)
 
         imgui.end_horizontal()
+        self.pin_area.position = imgui.get_item_rect_min()
+        self.pin_area.size = imgui.get_item_rect_size()
+
         imgui_node_editor.suspend()
         if imgui.is_item_hovered(imgui.HoveredFlags_.for_tooltip) and self.pin_tooltip:
             imgui.set_tooltip(self.pin_tooltip)
