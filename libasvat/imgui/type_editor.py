@@ -1326,3 +1326,73 @@ def render_all_properties(obj, ignored_props: set[str] = None):
         if (ignored_props is None) or (name not in ignored_props):
             changed = prop.render_editor(obj) or changed
     return changed
+
+
+def get_all_config_properties(obj_class: type):
+    """Gets all "configurable" properties of a class.
+
+    These properties are `ImguiProperties` (and subclasses), which define values from the object that the user can edit
+    in imgui, thus configuring the object to his liking.
+
+    So when recreating a object from the same class, if all configurable property values are the same, the object should behave
+    the same as a similar instance.
+
+    This is the same as ``get_all_renderable_properties()`` but filters out properties that are not configurable.
+
+    Args:
+        obj_class (type): class to get properties from.
+
+    Returns:
+        dict[str,ImguiProperty]: a "property name" => "ImguiProperty object" dict with all configurable properties
+        of the given class.
+    """
+    props = get_all_renderable_properties(obj_class)
+    from libasvat.imgui.nodes.nodes_data import NodeDataProperty
+
+    def filter_prop(prop: ImguiProperty):
+        if isinstance(prop, NodeDataProperty):
+            # We don't save values from properties marked with `use_prop_value`, since these get their values directly from their getters,
+            # so nothing that would matter to set from here.
+            return not prop.use_prop_value
+        return True
+
+    return {k: p for k, p in props.items() if filter_prop(p)}
+
+
+def get_all_prop_values_for_storage(obj):
+    """Gets the values of all configurable properties of the given obj.
+
+    Configurable properties are ImguiProperties (and their subclasses) that are used to allow a user to configure the object.
+    See ``get_all_config_properties()``.
+
+    Args:
+        obj (any): Object to get config-properties values.
+
+    Returns:
+        dict[str, any]: a property-name => value dict.
+    """
+    props = get_all_config_properties(type(obj))
+    return {k: prop.get_value_from_obj(obj) for k, prop in props.items()}
+
+
+def restore_prop_values_to_object(obj, values: dict[str]):
+    """Restores the configurable property values to the given object.
+
+    It's expected that `values` is a dict returned by a previous call to ``get_all_prop_values_for_storage(object)``.
+
+    Args:
+        obj (any): the object to restore
+        values (dict[str]): the name=>value dict of property values.
+
+    Returns:
+        list[str]: list of strings, containing issues that were found when restoring the values.
+    """
+    props = get_all_config_properties(type(obj))
+    issues: list[str] = []
+    for key, value in values.items():
+        if key not in props:
+            issues.append(f"Class {type(obj)} no longer has '{key}' property to set.")
+            continue
+        props[key].restore_value(obj, value)
+    return issues
+
