@@ -1080,12 +1080,26 @@ class ObjectEditor(ContainerTypeEditor):
         self.ignored_properties: list[str] = config.get("ignored_properties", None)
         """List of properties (by their names) of the object we're editing that should be ignored
         when rendering the editor."""
+        self.is_nullable: bool = config.get("is_nullable", False)
+        """If the value being edited can be None.
+
+        If True, the value can be None and a button will allow the user to instantiate a new object (and then edit it). A "delete"
+        button will also be shown to allow the user to set the value to None.
+        If this is False, the editor will automatically instantiate a new object to change a None value.
         """
 
     def draw_value_editor(self, value):
         changed = False
+        create_new_value = False
         if value is None:
-            value = self.value_type()
+            if self.is_nullable:
+                imgui.text("Value is None.")
+                if imgui.button("Create New Object?"):
+                    create_new_value = True
+            else:
+                create_new_value = True
+        if create_new_value:
+            value = self.instantiate_object()
             changed = True
         props = get_all_renderable_properties(type(value))
         ignored_props = self.get_ignored_properties(value)
@@ -1100,6 +1114,11 @@ class ObjectEditor(ContainerTypeEditor):
         method = getattr(value, updater_method_name, None)
         if method is not None:
             method(self)
+
+        if self.is_nullable and value is not None:
+            if imgui.button("Delete Object?"):
+                value = None
+                changed = True
 
         return changed, value
 
@@ -1126,6 +1145,42 @@ class ObjectEditor(ContainerTypeEditor):
             else:
                 return []
         return self.ignored_properties
+
+    def instantiate_object(self):
+        """Instantiates a new object of the type represented by this editor, in order to set it as the property being
+        edited by this editor.
+
+        If this Editor instance has its current obj/name attributes set, and the edited object has a
+        ``_editor_<NAME>_instantiate(self)`` method, then that method will be called passing this editor instance
+        as the sole argument. The method is expected to return the new object instance.
+
+        Otherwise, this method will instantiate a new object by calling the constructor of our value-type without any arguments.
+
+        Returns:
+            any: new object instance. Should be of our expected value-type (``self.value_type``).
+        """
+        if self._current_obj and self._current_name:
+            additem_method_name = f"_editor_{self._current_name}_instantiate"
+            method = getattr(self._current_obj, additem_method_name, None)
+            if method is not None:
+                return method(self)
+
+        return self.value_type()
+
+
+def obj_property(use_bullet_points: bool = False, ignored_properties: list[str] = None, is_nullable: bool = False):
+    """Imgui Property attribute for a custom-object type. These can be any types that are configured to being edited by a ObjectEditor.
+
+    Behaves the same way as a @property, but includes a ListEditor object for allowing changing this list's items in imgui.
+
+    Args:
+        use_bullet_points (bool, optional): If True, the editor will use bullet-points to indicate each property its editing. Defaults to False.
+        ignored_properties (list[str], optional): List of properties (by name) of the object being edited that should be ignored. These
+            properties won't be displayed/edited by this Editor. Defaults to None.
+        is_nullable (bool, optional): If True, the property being edited by this Editor can have a value of None, and can be set as None by the user.
+            Defaults to False.
+    """
+    return imgui_property(use_bullet_points=use_bullet_points, ignored_properties=ignored_properties, is_nullable=is_nullable)
 
 
 def get_all_renderable_properties(cls: type) -> dict[str, ImguiProperty]:
