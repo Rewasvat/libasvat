@@ -881,18 +881,13 @@ class ListEditor(ContainerTypeEditor):
         self.max_items: int = config.get("max_items", None)
         """Maximum number of items in the list. If the list has more than this, it will be automatically trimmed to this size.
         If None, there is no maximum."""
-        item_config: dict = config.get("item_config", {})
-        self.item_editor: TypeEditor = TypeDatabase().get_editor(self.value_subtypes[0], item_config)
+        self.item_config: dict = config.get("item_config", {})
+        """Base configuration for each item TypeEditor."""
+        item_type = self.value_subtypes[0]
+        self.item_editors: list[TypeEditor] = [TypeDatabase().get_editor(item_type, self.item_config)]
         """TypeEditor for the items in the list. This is used to edit each item in the list."""
-
-    def draw_header(self, obj, name):
-        opened = imgui.tree_node(name)
-        imgui.set_item_tooltip(self.attr_doc)
-        return opened
-
-    def draw_footer(self, obj, name, header_ok):
-        if header_ok:
-            imgui.tree_pop()
+        self.has_container_items: bool = issubclass(type(self.item_editors[0]), ContainerTypeEditor)
+        """Indicates if our Item Type is a container type (a type that has multiple values). This affects how we draw each item in the editor."""
 
     def draw_value_editor(self, value: list):
         if value is None:
@@ -903,7 +898,7 @@ class ListEditor(ContainerTypeEditor):
         # Update list if has less than minimun itens.
         if num_items < self.min_items:
             for i in range(self.min_items - num_items):
-                value.append(item_type())
+                value.append(self.create_new_item())
             num_items = self.min_items
             changed = True
         # Update list if has more than maximum itens.
@@ -912,45 +907,108 @@ class ListEditor(ContainerTypeEditor):
             num_items = self.max_items
             changed = True
         # Render editor for each item
-        can_remove = num_items <= self.min_items
+        can_remove = num_items > self.min_items
         remove_help = "Removes this item from the list."
         up_help = "Moves this item up in the list: changes position of this item with the previous item."
         down_help = "Moves this item down in the list: changes position of this item with the next item."
         for i in range(num_items):
             # Handle X button to remove item.
-            if i >= len(num_items):
-                # Since we can remove an item (see below), the list size can change in this loop.
-                # So we check to be sure.
-                break
             with imgui_ctx.push_id(f"{repr(value)}#{i}"):
                 if adv_button("X", tooltip=remove_help, is_enabled=can_remove):
                     value.pop(i)
+                    if i < len(self.item_editors):
+                        self.item_editors.pop(i)
+                    num_items -= 1
+                    changed = True
+                if i >= num_items:
+                    # Since we can remove an item (see above), the list size can change in this loop.
+                    # So we check to be sure.
+                    break
                 # Handle up/down buttons to change order of items.
                 imgui.same_line()
-                if adv_button("^", tooltip=up_help, is_enabled=(i > 0)):
-                    value[i], value[i - 1] = value[i - 1], value[i]
+                if adv_button("/\\", tooltip=up_help, is_enabled=(i > 0)):
+                    self.swap_items(value, i, i - 1)
                     changed = True
                 imgui.same_line()
-                if adv_button("v", tooltip=down_help, is_enabled=(i < num_items - 1)):
-                    value[i], value[i + 1] = value[i + 1], value[i]
+                if adv_button("\\/", tooltip=down_help, is_enabled=(i < num_items - 1)):
+                    self.swap_items(value, i, i + 1)
                     changed = True
                 imgui.same_line()
                 # Handle item editor.
+                can_show = True
                 item = value[i]
-                if self.item_editor:
-                    item_changed, new_item = self.item_editor.render_value_editor(item)
-                    if item_changed:
-                        value[i] = new_item
-                        changed = True
-                else:
-                    imgui.text_colored(Colors.red, f"Can't edit item '{item}'")
+                if self.has_container_items:
+                    can_show = imgui.tree_node(f"Item #{i+1}: {item}")
+                if can_show:
+                    item_editor = self.get_item_editor(i)
+                    if item_editor:
+                        item_changed, new_item = item_editor.render_value_editor(item)
+                        if item_changed:
+                            value[i] = new_item
+                            changed = True
+                    else:
+                        imgui.text_colored(Colors.red, f"Can't edit item '{item}'")
+                if self.has_container_items and can_show:
+                    imgui.tree_pop()
         # Handle button to add more itens.
         can_add = (self.max_items is None) or (len(value) < self.max_items)
         add_help = "Adds a new default item to the list. The item can then be edited."
         if adv_button("Add Item", tooltip=add_help, is_enabled=can_add):
-            value.append(item_type())
+            value.append(self.create_new_item())
             changed = True
         return changed, value
+
+    def create_new_item(self):
+        """Creates a new item of the type represented by this editor, in order to add it to the list being
+        edited by this editor.
+
+        If this Editor instance has its current obj/name attributes set, and the edited object has a
+        ``_editor_<NAME>_add_item(self)`` method, then that method will be called passing this editor instance
+        as the sole argument. The method is expected to return the new item to add to the list.
+
+        Otherwise, this method will create a new item to add to the list by calling the constructor of our
+        item-type without any arguments.
+
+        Returns:
+            any: new item instance to add to the list being edited. Should be of our expected item-type (``self.value_subtypes[0]``).
+        """
+        if self._current_obj and self._current_name:
+            additem_method_name = f"_editor_{self._current_name}_add_item"
+            method = getattr(self._current_obj, additem_method_name, None)
+            if method is not None:
+                return method(self)
+
+        item_type = self.value_subtypes[0]
+        return item_type()
+
+    def get_item_editor(self, index: int) -> TypeEditor:
+        """Gets our internal ItemEditor associated with the given index of the list we're editing.
+
+        Args:
+            index (int): item index in the list to get the matching editor for.
+
+        Raises:
+            IndexError: if index is invalid.
+
+        Returns:
+            TypeEditor: an instance of the TypeEditor for editing our item's type, associated to the given index.
+            If the editor instance didn't exist for the given index, it'll be created.
+        """
+        if index < 0:
+            raise IndexError("Index must be >= 0")
+        if 0 <= index < len(self.item_editors):
+            return self.item_editors[index]
+        item_editor = TypeDatabase().get_editor(self.value_subtypes[0], self.item_config)
+        self.item_editors.append(item_editor)
+        return item_editor
+
+    def swap_items(self, array: list, i: int, j: int):
+        """Swaps the items in the given array (and their TypeEditors) at the given indexes."""
+        array[i], array[j] = array[j], array[i]
+        editor_i = self.get_item_editor(i)
+        editor_j = self.get_item_editor(j)
+        self.item_editors[i] = editor_j
+        self.item_editors[j] = editor_i
 
 
 def list_property(min_items: int = 0, max_items: int = None, item_config: dict[str, any] = None):
