@@ -791,13 +791,39 @@ def color_property(flags: imgui.ColorEditFlags_ = imgui.ColorEditFlags_.none):
     return imgui_property(flags=flags)
 
 
-# TODO: isso ta QUEBRADO! Mas não tá sendo usado, então pode ser totalmente refatorado a vontade.
-class ListEditor(TypeEditor):
-    """Imgui TypeEditor for editing a LIST value."""
+class ContainerTypeEditor(TypeEditor):
+    """TypeEditor subclass for "container" types.
+
+    This editor is meant as a base-class for editors of container-types: types that are not a single
+    ("simple" or primitive) value, but instead are a collection of values, such as lists, dicts, custom-types, etc.
+
+    While "simple" types are usually edited using a single control (such as a slider, checkbox, etc), container types
+    can have multiple controls to edit its different values, often employing sub-TypeEditors for each of the values.
+
+    As such, this simple class overrides TypeEditor's ``draw_header/footer()`` methods to draw the value-editor inside
+    a imgui tree-node, if its opened by the user.
+    """
 
     def __init__(self, config: dict):
         super().__init__(config)
         self.add_tooltip_after_value = False
+
+    def draw_header(self, obj, name):
+        opened = imgui.tree_node(self.get_name_to_show(name))
+        imgui.set_item_tooltip(self.attr_doc)
+        return opened
+
+    def draw_footer(self, obj, name, header_ok):
+        if header_ok:
+            imgui.tree_pop()
+
+
+@TypeDatabase.register_editor_for_type(list)
+class ListEditor(ContainerTypeEditor):
+    """Imgui TypeEditor for editing a LIST value."""
+
+    def __init__(self, config: dict):
+        super().__init__(config)
         self.convert_value_to_type = True
         self.extra_accepted_input_types = tuple | set
         self.color = Colors.yellow
@@ -1026,7 +1052,7 @@ class UnionEditor(TypeEditor):
         return list(self.subeditors.keys())[0]  # defaults to first subtype
 
 
-class ObjectEditor(TypeEditor):
+class ObjectEditor(ContainerTypeEditor):
     """Specialized TypeEditor for a generic custom-class object.
 
     This editor class can be used to edit any custom class that has renderable (ImGuiProperty) properties.
@@ -1045,7 +1071,6 @@ class ObjectEditor(TypeEditor):
 
     def __init__(self, config: dict):
         super().__init__(config)
-        self.add_tooltip_after_value = False
         self.convert_value_to_type = config.get("convert_value", False)
         self.extra_accepted_input_types = config.get("accepted_input_types", None)
         self.color = config.get("color", Colors.blue)
@@ -1055,15 +1080,7 @@ class ObjectEditor(TypeEditor):
         self.ignored_properties: list[str] = config.get("ignored_properties", None)
         """List of properties (by their names) of the object we're editing that should be ignored
         when rendering the editor."""
-
-    def draw_header(self, obj, name):
-        opened = imgui.tree_node(name)
-        imgui.set_item_tooltip(self.attr_doc)
-        return opened
-
-    def draw_footer(self, obj, name, header_ok):
-        if header_ok:
-            imgui.tree_pop()
+        """
 
     def draw_value_editor(self, value):
         changed = False
