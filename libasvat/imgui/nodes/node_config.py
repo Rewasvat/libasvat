@@ -1,7 +1,7 @@
 import click
-import libasvat.imgui.type_editor as types
 from libasvat.imgui.nodes import Node, PinKind, NodeLink, NodeSystem
 from libasvat.imgui.math import Rectangle
+from libasvat.imgui.editors.controller import get_all_prop_values_for_storage, restore_prop_values_to_object
 from imgui_bundle import imgui_node_editor  # type: ignore
 
 
@@ -133,7 +133,7 @@ class NodeConfig:
         node.setup_from_config(self._custom_config_data)
 
         # Set node properties.
-        issues = types.restore_prop_values_to_object(node, self._prop_values)
+        issues = restore_prop_values_to_object(node, self._prop_values)
         for msg in issues:
             click.secho(msg, fg="yellow")
 
@@ -147,7 +147,7 @@ class NodeConfig:
     @classmethod
     def from_node(cls, node: Node):
         """Creates a new NodeConfig based on the given Node."""
-        values = types.get_all_prop_values_for_storage(node)
+        values = get_all_prop_values_for_storage(node)
         custom_config_data = node.get_custom_config_data()
         links = PinLinkConfig.from_node(node)
         return cls(type(node), values, repr(node), node.node_area, custom_config_data, links)
