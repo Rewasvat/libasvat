@@ -373,6 +373,8 @@ class TypeEditor:
         self.convert_value_to_type: bool = False
         """If the value we receive should be converted to our ``value_type`` before using. This is done using
         ``self.value_type(value)``, like most basic python types accept."""
+        self.use_pretty_name: bool = config.get("use_pretty_name", True)
+        """If the name of the property being edited should be shown as a "pretty name" (with spaces and capitalized)."""
 
     def type_name(self):
         """Gets a human readable name of the type represented by this editor."""
@@ -407,14 +409,60 @@ class TypeEditor:
         return changed
 
     def draw_header(self, obj, name: str) -> bool:
-        """TODO"""
-        imgui.text(f"{name}:")
+        """Draws the "header" part of this property editor (in ``self.render_property()``).
+
+        The header is responsible for:
+        * Drawing the name (or key) of the property.
+        * Indicating (returning) if the value editor should be drawn or not.
+
+        This can then be used (along with ``self.draw_footer()``) to change the way the property is drawn,
+        using other imgui controls that have a "open/closed" behavior (such as tree-nodes, collapsible headers, etc).
+
+        The default implementation of this method in TypeEditor simply draws the name as text with our ``self.attr_doc``
+        as tooltip, and always returns True.
+
+        Args:
+            obj (any): the object being updated
+            name (str): the name of the attribute in object we're editing.
+
+        Returns:
+            bool: if True, ``self.render_property()`` will draw the value-editor for this property. Otherwise it'll
+            skip the value, only drawing this header.
+        """
+        imgui.text(f"{self.get_name_to_show(name)}:")
         imgui.set_item_tooltip(self.attr_doc)
         imgui.same_line()
         return True
 
     def draw_footer(self, obj, name: str, header_ok: bool):
-        """TODO"""
+        """Draws the "footer" part of this property editor (in ``self.render_property()``).
+
+        The footer is drawn at the end of the ``render_property()``, in order to "close up" the Type Editor.
+
+        Usually this is used along with the header to use imgui controls that have a "open/closed" behavior.
+        For example using imgui tree-nodes: the header opens the node, while the footer pops it.
+
+        The default implementation of this method in TypeEditor does nothing.
+
+        Args:
+            obj (any): the object being updated
+            name (str): the name of the attribute in object we're editing.
+            header_ok (bool): the boolean returned by ``self.draw_header()`` before calling this method.
+        """
+
+    def get_name_to_show(self, name: str):
+        """Converts the given property name to the string we should display to the user in the editor.
+
+        Args:
+            name (str): the name of the attribute in object we're editing.
+
+        Returns:
+            str: if ``self.use_pretty_name`` is False, will return the name as-is. Otherwise will "pretty-print"
+            the name: replacing underscores with spaces and capitalizing the first letter in all words.
+        """
+        if self.use_pretty_name:
+            return " ".join(word.capitalize() for word in name.split("_"))
+        return name
 
     def render_value_editor[T](self, value: T) -> tuple[bool, T]:
         """Renders the controls for editing a value of type T, which should be the type expected by this TypeEditor instance.
