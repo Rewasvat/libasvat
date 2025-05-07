@@ -3,6 +3,7 @@ import typing
 import inspect
 import libasvat.command_utils as cmd_utils
 from enum import Enum
+from contextlib import contextmanager
 from imgui_bundle import imgui, imgui_ctx
 from libasvat.imgui.math import Vector2
 from libasvat.imgui.colors import Color, Colors
@@ -375,6 +376,20 @@ class TypeEditor:
         ``self.value_type(value)``, like most basic python types accept."""
         self.use_pretty_name: bool = config.get("use_pretty_name", True)
         """If the name of the property being edited should be shown as a "pretty name" (with spaces and capitalized)."""
+        self._current_obj: any = None
+        """Current object being edited.
+
+        This can be None if the object being edited is not known. Use with care.
+        ``self.render_property(obj, name)`` is an example of a method that will set this attribute during its execution.
+        See ``self.editing_obj_prop()``.
+        """
+        self._current_name: str = None
+        """Current property-name being edited.
+
+        This can be None if the property-name being edited is not known. Use with care.
+        ``self.render_property(obj, name)`` is an example of a method that will set this attribute during its execution.
+        See ``self.editing_obj_prop()``.
+        """
 
     def type_name(self):
         """Gets a human readable name of the type represented by this editor."""
@@ -386,6 +401,13 @@ class TypeEditor:
         This also allows the object to automatically update this editor before rendering the key:value controls.
         See ``self.update_from_obj`` (which is called from here).
 
+        The general flow of this method is:
+        * Call ``self.update_from_obj(obj, name)`` to update the editor's attributes from the object.
+        * Call ``self.draw_header(obj, name)`` to draw the header part of the property editor.
+        * Call ``self.render_value_editor(value)`` to draw the value editor for this property, if ``draw_header()`` returned True.
+        And if the value was changed, set the new value in the object.
+        * Call ``self.draw_footer(obj, name, can_draw_value)`` to draw the footer part of the property editor.
+
         Args:
             obj (any): the object being updated
             name (str): the name of the attribute in object we're editing.
@@ -394,18 +416,19 @@ class TypeEditor:
             bool: if the property's value was changed.
             If so, the new value was set in the object automatically.
         """
-        self.update_from_obj(obj, name)
-        can_draw_value = self.draw_header(obj, name)
+        with self.editing_obj_prop(obj, name):
+            self.update_from_obj(obj, name)
+            can_draw_value = self.draw_header(obj, name)
 
-        changed = False
-        if can_draw_value:
-            value = getattr(obj, name)
-            value = self._check_value_type(value)
-            changed, new_value = self.render_value_editor(value)
-            if changed:
-                setattr(obj, name, new_value)
+            changed = False
+            if can_draw_value:
+                value = getattr(obj, name)
+                value = self._check_value_type(value)
+                changed, new_value = self.render_value_editor(value)
+                if changed:
+                    setattr(obj, name, new_value)
 
-        self.draw_footer(obj, name, can_draw_value)
+            self.draw_footer(obj, name, can_draw_value)
         return changed
 
     def draw_header(self, obj, name: str) -> bool:
@@ -538,6 +561,31 @@ class TypeEditor:
                     # If conversion failed and type wasn't None, then we have a real error on our hands. Re-raise the exception to see it.
                     raise
         return value
+
+    @contextmanager
+    def editing_obj_prop(self, obj, name: str):
+        """WITH context-manager to set our current object and property-name being edited.
+
+        This sets our ``self._current_obj`` and ``self._current_name`` attributes to the given values, yields,
+        and then finally restores the attributes to None.
+
+        Several methods in this class receive the ``obj, name`` arguments to indicate object and property-name being
+        edited. But not all methods can receive this. For those that can't (such as ``draw_value_editor(value)``),
+        the ``self._current_obj`` and ``self._current_name`` attributes set by this context-manager can be used instead.
+
+        By default, ``self.render_property(obj, name)`` uses this to set up the current obj/name while it is running.
+
+        Use this (and the current obj/name attributes) with care.
+
+        Args:
+            obj (any): the object being updated
+            name (str): the name of the attribute in object we're editing.
+        """
+        self._current_obj = obj
+        self._current_name = name
+        yield
+        self._current_obj = None
+        self._current_name = None
 
 
 @TypeDatabase.register_editor_for_type(str)
