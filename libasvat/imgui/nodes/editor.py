@@ -1,4 +1,7 @@
-from typing import Callable
+import click
+import codecs
+import pickle
+import traceback
 from libasvat.imgui.colors import Colors, Color
 from libasvat.imgui.general import menu_item, object_creation_menu
 from libasvat.imgui.nodes.nodes import Node, NodePin, NodeLink, PinKind
@@ -23,8 +26,6 @@ def get_all_links_from_nodes(nodes: list[Node]):
     return list(dict.fromkeys(links))
 
 
-# TODO: copy/paste/cut (com suporte aos atalhos de teclado)
-#   - testar o role de shortcuts do imgui-node-editor
 # TODO: esquema de salvar estado pra ter CTRL+Z (UNDO)
 # TODO: atalho de teclado pro Fit To Window
 class NodeSystem:
@@ -66,6 +67,11 @@ class NodeSystem:
 
         If None, then no highlight will be shown. Defaults to None.
         """
+
+    @property
+    def selected_nodes(self):
+        """Returns a list of all nodes in this system that are selected by the user."""
+        return [node for node in self.nodes if node.is_selected]
 
     def add_node(self, node: Node):
         """Adds a node to this NodeSystem. This will show the node in the editor, and allow it to be edited/updated.
@@ -165,14 +171,13 @@ class NodeSystem:
         imgui.begin_child(f"{repr(self)}NodeSystemDetailsPanel")
         has_selection = False
 
-        for node in self.nodes:
-            if node.is_selected:
-                has_selection = True
-                imgui.push_id(repr(node))
-                if imgui.collapsing_header(node.node_title):
-                    node.render_edit_details()
-                    imgui.spacing()
-                imgui.pop_id()
+        for node in self.selected_nodes:
+            has_selection = True
+            imgui.push_id(repr(node))
+            if imgui.collapsing_header(node.node_title):
+                node.render_edit_details()
+                imgui.spacing()
+            imgui.pop_id()
 
         if not has_selection:
             imgui.text_wrapped("Select Nodes to display & edit their details here.")
@@ -201,6 +206,8 @@ class NodeSystem:
             self.handle_node_creation_interactions()
             # Step 2-B) Handle deletion action of links
             self.handle_node_deletion_interactions()
+            # Step 2-C) Handle shortcuts (copy/cut/paste)
+            self.handle_node_shortcut_interactions()
 
         imgui.set_cursor_screen_pos(backup_pos)  # NOTE: Pq? Tinha isso nos exemplos, mas não parece fazer diff.
 
@@ -238,8 +245,7 @@ class NodeSystem:
                     self.show_label("Create Node (linked as possible to this pin)")
                     # Check and set pin highlights for linking
                     for node in self.nodes:
-                        all_pins = node.get_input_pins() + node.get_output_pins()
-                        for pin in all_pins:
+                        for pin in node.all_pins:
                             if new_pin.can_link_to(pin)[0]:
                                 pin.highlight_color = self.link_option_ok_hightlight
                             else:
@@ -275,6 +281,17 @@ class NodeSystem:
                     if link:
                         link.delete()
             imgui_node_editor.end_delete()
+
+    def handle_node_shortcut_interactions(self):
+        """Handles shortcut interactions from the node editor."""
+        if imgui_node_editor.begin_shortcut():
+            if imgui_node_editor.accept_copy():
+                self.copy_nodes()
+            if imgui_node_editor.accept_cut():
+                self.cut_nodes()
+            if imgui_node_editor.accept_paste():
+                self.paste_nodes()
+            imgui_node_editor.end_shortcut()
 
     def handle_node_context_menu_interactions(self):
         """Handles interactions and rendering of all context menus for the node editor."""
@@ -481,3 +498,67 @@ class NodeSystem:
             node.delete()
             node.system = None
         self.nodes.clear()
+
+    def copy_nodes(self):
+        """Copies the selected nodes from this system to the clipboard.
+
+        Only nodes that can be deleted are copied.
+
+        Returns:
+            list[NodeConfig]: list of NodeConfig objects that represent the nodes in the clipboard.
+        """
+        from libasvat.imgui.nodes.node_config import NodeConfig
+        configs: list[NodeConfig] = []
+        for node in self.selected_nodes:
+            if node.can_be_deleted:
+                node_config = NodeConfig.from_node(node)
+                configs.append(node_config)
+
+        try:
+            configs_str = codecs.encode(pickle.dumps(configs), "base64").decode()
+        except Exception:
+            click.secho(f"Failed to save NodeConfig data to the clipboard!\n{traceback.format_exc()}", fg="red")
+            configs_str = ""
+        imgui.set_clipboard_text(configs_str)
+
+        return configs
+
+    def cut_nodes(self):
+        """Cuts (copies and then deletes) the selected nodes from this system to the clipboard.
+
+        Only nodes that can be deleted are cut.
+
+        Returns:
+            list[NodeConfig]: list of NodeConfig objects that represent the nodes in the clipboard.
+        """
+        configs = self.copy_nodes()
+        for node in self.selected_nodes:
+            if node.can_be_deleted:
+                node.delete()
+        return configs
+
+    def paste_nodes(self):
+        """Pastes the nodes from the clipboard into this system.
+
+        Returns:
+            list[Node]: list of Node objects that were pasted into this system.
+        """
+        from libasvat.imgui.nodes.node_config import NodeConfig
+        configs_str = imgui.get_clipboard_text()
+        if not configs_str:
+            return []
+
+        try:
+            configs: list[NodeConfig] = pickle.loads(codecs.decode(configs_str.encode(), "base64"))
+        except Exception:
+            click.secho(f"Failed to load NodeConfig data from the clipboard!\n{traceback.format_exc()}", fg="red")
+            configs = []
+
+        refs_table = {}
+        new_nodes: list[Node] = []
+        for config in configs:
+            node = config.instantiate(refs_table)
+            self.add_node(node)
+            new_nodes.append(node)
+
+        return new_nodes
