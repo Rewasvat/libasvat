@@ -208,6 +208,14 @@ class Node:
         """Gets a list of all output pins of this node."""
         return self._outputs
 
+    @property
+    def all_pins(self):
+        """Gets all pins from this node.
+
+        This is equivalent to ``self.get_input_pins() + self.get_output_pins()``
+        """
+        return self.get_input_pins() + self.get_output_pins()
+
     def get_input_pin(self, name: str, pin_type: type['NodePin'] | tuple['NodePin'] = None):
         """Gets our INPUT pin with the given name.
 
@@ -479,7 +487,7 @@ class NodePin:
         self.default_link_thickness: float = 1
         """Default thickness for link lines created from this pin (used when this is an output pin)."""
         self.can_be_deleted: bool = False
-        """If this object can be deleted by user-interaction."""
+        """If this pin can be deleted by user-interaction."""
         self.pin_tooltip: str = None
         """Tooltip text to display when this pin is hovered by the user. If none, no tooltip will be displayed."""
         self.prettify_name = False
