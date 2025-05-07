@@ -503,6 +503,7 @@ class StringEditor(TypeEditor):
         self.options: list[str] = config.get("options")
         self.docs: list[str] | dict[str, str] | None = config.get("docs")
         self.option_flags: imgui.SelectableFlags_ = config.get("option_flags", 0)
+        self.enforce_options: bool = config.get("enforce_options", True)
         self.add_tooltip_after_value = self.options is None
         self.multiline: bool = config.get("multiline", False)
         self.color = Colors.magenta
@@ -521,7 +522,7 @@ class StringEditor(TypeEditor):
                 changed, new_value = imgui.input_text("##", value, flags=self.flags)
             return changed, new_value.replace("\\n", "\n")
         else:
-            return drop_down(value, self.options, self.docs, default_doc=self.attr_doc, item_flags=self.option_flags)
+            return drop_down(value, self.options, self.docs, default_doc=self.attr_doc, enforce=self.enforce_options, item_flags=self.option_flags)
 
 
 def string_property(flags: imgui.InputTextFlags_ = 0, options: list[str] = None, docs: list | dict = None, option_flags: imgui.SelectableFlags_ = 0):

@@ -109,7 +109,7 @@ def menu_item(title: str):
 
 
 def drop_down(value: str, options: list[str], docs: list[str] | dict[str, str] = None, default_doc: str = None,
-              drop_flags: imgui.ComboFlags_ = 0, item_flags: imgui.SelectableFlags_ = 0):
+              enforce: bool = True, drop_flags: imgui.ComboFlags_ = 0, item_flags: imgui.SelectableFlags_ = 0):
     """Renders a simple "drop-down" control for selecting a value amongst a list of possible options.
 
     This is a simple combo-box that lists the options and allows one to be selected.
@@ -119,18 +119,24 @@ def drop_down(value: str, options: list[str], docs: list[str] | dict[str, str] =
         value (str): The currently selected value.
         options (list[str]): The list of possible values.
         docs (list[str] | dict[str, str], optional): Optional documentation for each value. Can be, in order of priority, one of the given types:
-        * Dict (``{value: doc}``): If a value isn't found on the dict, then ``default_doc`` is used in its place.
-        * List: for any index, we get the value from options and its doc from here. If the list doesn't have the index, ``default_doc`` is used.
+            * Dict (``{value: doc}``): If a value isn't found on the dict, then ``default_doc`` is used in its place.
+            * List: for any index, we get the value from options and its doc from here. If the list doesn't have the index, ``default_doc`` is used.
         default_doc (str, optional): Optional default docstring to use as tooltips for any option. If ``docs`` is None, and this is valid,
-        this docstring will be used for all options.
+            this docstring will be used for all options.
+        enforce (bool, optional): If True, the value must be one of the options. The value is set to the first option if it isn't found in the list.
+            If False, the value is kept as is, and the user can select any value from the list. Defaults to True.
         drop_flags (imgui.ComboFlags_, optional): imgui Combo flags for the root combo-box of the dropdown.
         item_flags (imgui.SelectableFlags_, optional): imgui Selectable flags for use in each value selectable.
 
     Returns:
         tuple[bool, str]: returns a ``(changed, new_value)`` tuple.
     """
-    changed = False
-    new_value = value
+    if value in options:
+        changed = False
+        new_value = value
+    elif len(options) > 0 and enforce:
+        changed = True
+        new_value = options[0]
     if imgui.begin_combo("##", value, flags=drop_flags):
         for i, option in enumerate(options):
             if imgui.selectable(option, option == value, flags=item_flags)[0]:
