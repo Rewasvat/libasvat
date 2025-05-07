@@ -108,17 +108,18 @@ def menu_item(title: str):
     return imgui.menu_item(title, "", False)[0]
 
 
-def drop_down(value: str, options: list[str], docs: list[str] | dict[str, str] = None, default_doc: str = None,
-              enforce: bool = True, drop_flags: imgui.ComboFlags_ = 0, item_flags: imgui.SelectableFlags_ = 0):
+def drop_down[T](value: T, options: list[T], docs: list[str] | dict[T, str] = None, default_doc: str = None,
+                 enforce: bool = True, drop_flags: imgui.ComboFlags_ = 0, item_flags: imgui.SelectableFlags_ = 0):
     """Renders a simple "drop-down" control for selecting a value amongst a list of possible options.
 
     This is a simple combo-box that lists the options and allows one to be selected.
     Allows each value to have its own tooltip to document it on the UI.
+    The string value (`str(x)`) of the value/options are displayed in imgui for simplicity.
 
     Args:
-        value (str): The currently selected value.
-        options (list[str]): The list of possible values.
-        docs (list[str] | dict[str, str], optional): Optional documentation for each value. Can be, in order of priority, one of the given types:
+        value (T): The currently selected value.
+        options (list[T]): The list of possible values.
+        docs (list[str] | dict[T, str], optional): Optional documentation for each value. Can be, in order of priority, one of the given types:
             * Dict (``{value: doc}``): If a value isn't found on the dict, then ``default_doc`` is used in its place.
             * List: for any index, we get the value from options and its doc from here. If the list doesn't have the index, ``default_doc`` is used.
         default_doc (str, optional): Optional default docstring to use as tooltips for any option. If ``docs`` is None, and this is valid,
@@ -129,17 +130,16 @@ def drop_down(value: str, options: list[str], docs: list[str] | dict[str, str] =
         item_flags (imgui.SelectableFlags_, optional): imgui Selectable flags for use in each value selectable.
 
     Returns:
-        tuple[bool, str]: returns a ``(changed, new_value)`` tuple.
+        tuple[bool, T]: returns a ``(changed, new_value)`` tuple.
     """
-    if value in options:
-        changed = False
-        new_value = value
-    elif len(options) > 0 and enforce:
+    changed = False
+    new_value = value
+    if value not in options and (len(options) > 0) and enforce:
         changed = True
         new_value = options[0]
-    if imgui.begin_combo("##", value, flags=drop_flags):
+    if imgui.begin_combo("##", str(value), flags=drop_flags):
         for i, option in enumerate(options):
-            if imgui.selectable(option, option == value, flags=item_flags)[0]:
+            if imgui.selectable(str(option), option == value, flags=item_flags)[0]:
                 changed = True
                 new_value = option
             if docs is not None:
