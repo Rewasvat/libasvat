@@ -153,11 +153,18 @@ class EditorController:
         """If a few common imgui tips should be shown in the "Editor Commands" section of the editor."""
         self.use_new_line: bool = True
         """If empty lines should be added before and after the object's editor controls, in order to improve readability."""
+        self.always_editing: bool = False
+        """Indicates if this controller is in "always editing" mode. By default this is False.
+
+        When always editing, the controller's ``is_editing`` always returns True, thus the editor will always be rendered.
+        The Accept/Cancel buttons won't be displayed, and our methods ``start_edit()``, ``accept_edit()`` and ``cancel_edit()``
+        will do nothing.
+        """
 
     @property
     def is_editing(self) -> bool:
         """Indicates if this EditorControl is currently editing the object."""
-        return self._is_editing
+        return self._is_editing or self.always_editing
 
     def render_editor(self):
         """Renders the editor for the object. Does nothing if not editing.
@@ -171,7 +178,7 @@ class EditorController:
         * **Tips**: renders some common editor tips.
         * **Footer**: contains the CANCEL/ACCEPT buttons, to cancel/accept the edit.
         """
-        if not self._is_editing:
+        if not self.is_editing:
             return
         imgui.separator_text(f"{self.obj} Editor")
         if self.use_new_line:
@@ -188,11 +195,12 @@ class EditorController:
         if self.show_tips:
             imgui.text_wrapped(f"Tip #1: hovering the mouse over a property-name or value editor control usually shows a tooltip with more information.")
             imgui.text_wrapped(f"Tip #2: most number controls can be edited by click & dragging the mouse over them.")
-        with imgui_ctx.begin_horizontal(f"{self.obj}EditorControllerButtons"):
-            if adv_button("Cancel", tooltip="Closes the editor, cancelling the current edit and restoring the original values."):
-                self.cancel_edit()
-            if adv_button("Accept", tooltip="Closes the editor, accepting the current edit and keeping the new values."):
-                self.accept_edit()
+        if not self.always_editing:
+            with imgui_ctx.begin_horizontal(f"{self.obj}EditorControllerButtons"):
+                if adv_button("Cancel", tooltip="Closes the editor, cancelling the current edit and restoring the original values."):
+                    self.cancel_edit()
+                if adv_button("Accept", tooltip="Closes the editor, accepting the current edit and keeping the new values."):
+                    self.accept_edit()
 
     def start_edit(self):
         """Starts editing the object, allowing the user to change its values.
@@ -200,7 +208,7 @@ class EditorController:
 
         This method also calls the ``_on_start_edit(EditorController)`` method of the object, if it exists.
         """
-        if self._is_editing:
+        if self.is_editing:
             return
         self._is_editing = True
         self._backup_prop_values.clear()
@@ -214,7 +222,7 @@ class EditorController:
 
         This method also calls the ``_on_accept_edit(EditorController)`` method of the object, if it exists.
         """
-        if not self._is_editing:
+        if (not self.is_editing) or self.always_editing:
             return
         self._is_editing = False
         # Edited values should already be set in the object, so all we need to do is clear the backup values.
@@ -230,7 +238,7 @@ class EditorController:
 
         This method also calls the ``_on_cancel_edit(EditorController)`` method of the object, if it exists.
         """
-        if not self._is_editing:
+        if (not self.is_editing) or self.always_editing:
             return
         self._is_editing = False
         issues = restore_prop_values_to_object(self.obj, self._backup_prop_values)
