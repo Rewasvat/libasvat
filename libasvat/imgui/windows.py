@@ -222,14 +222,37 @@ class AppWindow(BasicWindow):
 
         This can be changed in runtime by the app's menu or status bar, if they're enabled.
         """
-        self.idle_fps: float = 1.0
-        """The FPS at which the window will run when idling (see ``self.enable_fps_idling``)"""
+        self._idle_fps: float = 1.0
         self.remember_enable_idling: bool = True
         """If the ``self.enable_fps_idling`` flag will be persisted with the window's cached settings.
 
         When true, this essentially overwrites ``self.enable_fps_idling`` to the user's selected value if the window has been
         opened once before.
         """
+        self._is_running: bool = False
+
+    @property
+    def is_running(self) -> bool:
+        """If the window is currently running.
+
+        This is set to True when the window is opened with ``self.run()`` and set to False when the window is closed.
+        """
+        return self._is_running
+
+    @property
+    def idle_fps(self) -> float:
+        """The FPS at which the window will run when idling (see ``self.enable_fps_idling``)
+
+        Note that this is just the "target" FPS cap. The actual FPS when idling may be lower depending on the system performance.
+        """
+        return self._idle_fps
+
+    @idle_fps.setter
+    def idle_fps(self, value: float):
+        self._idle_fps = value
+        if self.is_running:
+            run_params = hello_imgui.get_runner_params()
+            run_params.fps_idling.fps_idle = self.idle_fps
 
     def run(self):
         """Runs this window as a new IMGUI App.
@@ -351,7 +374,7 @@ class AppWindow(BasicWindow):
 
         Sub classes may override this to add their own initialization logic. The default implementation does nothing.
         """
-        pass
+        self._is_running = True
 
     def on_before_exit(self):
         """Callback executed once before the app window exits.
@@ -367,6 +390,7 @@ class AppWindow(BasicWindow):
         # That means all stored fonts will stop working. So we need to clear them in-case another App Window
         # is created in this same session.
         font_db.clear()
+        self._is_running = False
 
     def on_pre_new_frame(self):
         """Callback called each frame, but before IMGUI starts rendering the frame (that is, before ``imgui.new_frame()``).
