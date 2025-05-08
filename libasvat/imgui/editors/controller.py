@@ -177,9 +177,12 @@ class EditorController:
         * **Content**: renders the object's TypeEditor.
         * **Tips**: renders some common editor tips.
         * **Footer**: contains the CANCEL/ACCEPT buttons, to cancel/accept the edit.
+
+        Returns:
+            bool: indicates if our object was changed (it was edited by the user).
         """
         if not self.is_editing:
-            return
+            return False
         imgui.separator_text(f"{self.obj} Editor")
         if self.use_new_line:
             imgui.new_line()
@@ -201,6 +204,7 @@ class EditorController:
                     self.cancel_edit()
                 if adv_button("Accept", tooltip="Closes the editor, accepting the current edit and keeping the new values."):
                     self.accept_edit()
+        return changed
 
     def start_edit(self):
         """Starts editing the object, allowing the user to change its values.
