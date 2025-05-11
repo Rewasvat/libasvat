@@ -87,7 +87,8 @@ def generic_popup[T](trigger_open: bool, title: str, contents: Callable[[], T], 
         kind to be used by whoever is calling this.
 
     Args:
-        trigger_open (bool): If the popup should be opened on this frame. This needs to be true in a single frame, as the return from `imgui.button()`.
+        trigger_open (bool): If the popup should be opened on this frame. This needs to be true in a single frame,
+            as the return from `imgui.button()`.
         title (str): Title of the popup window. Ideally, this should be unique between popups in the same Imgui context.
         contents (callable() -> T): Callable that when executed will draw (using imgui) the popup's contents.
         size (Vector2, optional): Initial size of the popup window when opened. Defaults to the title's size x(2, 8).
