@@ -561,8 +561,6 @@ class NodeSystem:
             for node in self.selected_nodes:
                 if node.can_be_deleted:
                     node.delete()
-        # TODO: isso ta estranho, ainda tem casos de CUT deletando nodes, e ai um PASTE bota ele de volta,
-        #   mas certos pins ficam "fake-linked". Aparece o link no editor, mas não tá realmente linkado...
         return configs
 
     def paste_nodes(self):
