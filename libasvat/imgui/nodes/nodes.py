@@ -703,7 +703,8 @@ class NodePin:
     def delete_all_links(self):
         """Removes all links from this pin."""
         with self.parent_node._block_state():
-            imgui_node_editor.break_links(self.pin_id)
+            for link in list(self._links.values()):
+                link.delete()
 
     def _add_new_link(self, pin: 'NodePin') -> 'NodeLink':
         """Internal method to create a new link between this and the given pin, and add it
