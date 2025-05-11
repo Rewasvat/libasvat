@@ -69,6 +69,15 @@ class Node:
         size = imgui_node_editor.get_node_size(self.node_id)
         return Rectangle(pos, size)
 
+    def set_position(self, pos: Vector2):
+        """Sets this node's position in the node-editor's graph canvas.
+
+        Args:
+            pos (Vector2): position to set, in node-editor canvas space (see ``imgui_node_editor.screen_to_canvas()``).
+        """
+        with self._block_state():
+            imgui_node_editor.set_node_position(self.node_id, pos)
+
     def draw_node(self):
         """Draws the node in imgui's Node Editor.
 
@@ -414,7 +423,7 @@ class Node:
 
             position = Vector2(x, y) - node.node_area.size * 0.5
             if level > 0:
-                imgui_node_editor.set_node_position(node.node_id, position + offset)
+                node.set_position(position + offset)
             else:
                 offset = node.node_area.position - position
             return True
