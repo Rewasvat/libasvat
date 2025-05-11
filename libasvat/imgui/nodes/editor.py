@@ -4,7 +4,7 @@ import pickle
 import traceback
 from contextlib import contextmanager
 from libasvat.imgui.colors import Colors, Color
-from libasvat.imgui.general import menu_item, object_creation_menu
+from libasvat.imgui.general import object_creation_menu, adv_button
 from libasvat.imgui.nodes.nodes import Node, NodePin, NodeLink, PinKind
 from imgui_bundle import imgui, imgui_node_editor  # type: ignore
 from typing import TYPE_CHECKING
@@ -31,7 +31,6 @@ def get_all_links_from_nodes(nodes: list[Node]):
     return list(dict.fromkeys(links))
 
 
-# TODO: atalho de teclado pro Fit To Window
 class NodeSystem:
     """Represents a Node Editor system.
 
@@ -308,6 +307,10 @@ class NodeSystem:
             self.undo_state()
         if imgui.shortcut(imgui.Key.mod_ctrl | imgui.Key.y):
             self.redo_state()
+        if imgui.shortcut(imgui.Key.mod_ctrl | imgui.Key.f):
+            self.fit_to_window()
+        if imgui.shortcut(imgui.Key.mod_ctrl | imgui.Key.a):
+            self.select_all_nodes()
         if imgui_node_editor.begin_shortcut():
             if imgui_node_editor.accept_copy():
                 self.copy_nodes()
@@ -360,7 +363,7 @@ class NodeSystem:
                 imgui.text_colored(Colors.red, "Invalid Node")
             if node and node.can_be_deleted:
                 imgui.separator()
-                if menu_item("Delete"):
+                if imgui.menu_item_simple("Delete"):
                     imgui_node_editor.delete_node(node.node_id)
             imgui.end_popup()
 
@@ -382,10 +385,10 @@ class NodeSystem:
                 imgui.text_colored(Colors.red, "Invalid Pin")
             if pin:
                 imgui.separator()
-                if menu_item("Remove All Links"):
+                if imgui.menu_item_simple("Remove All Links"):
                     pin.delete_all_links()
                 if pin.can_be_deleted:
-                    if menu_item("Delete"):
+                    if imgui.menu_item_simple("Delete"):
                         pin.delete()
             imgui.end_popup()
 
@@ -406,7 +409,7 @@ class NodeSystem:
             else:
                 imgui.text_colored(Colors.red, "Invalid link")
             imgui.separator()
-            if menu_item("Delete"):
+            if imgui.menu_item_simple("Delete"):
                 imgui_node_editor.delete_link(link.link_id)
             imgui.end_popup()
 
@@ -436,8 +439,14 @@ class NodeSystem:
                     new_node.set_position(imgui_node_editor.screen_to_canvas(pos))
             if self._create_new_node_to_pin is None:
                 imgui.separator()
-                if menu_item("Fit to Window"):
+                if adv_button("Fit to Window", tooltip=self.fit_to_window.__doc__, in_menu=True):
                     self.fit_to_window()
+                if adv_button("Undo", tooltip=self.undo_state.__doc__, in_menu=True):
+                    self.undo_state()
+                if adv_button("Redo", tooltip=self.redo_state.__doc__, in_menu=True):
+                    self.redo_state()
+                if adv_button("Select All", tooltip=self.select_all_nodes.__doc__, in_menu=True):
+                    self.select_all_nodes()
             imgui.end_popup()
 
     def draw_background_context_menu(self, linked_to_pin: NodePin | None) -> Node | None:
@@ -513,9 +522,16 @@ class NodeSystem:
         return area
 
     def fit_to_window(self):
-        """Changes the editor's viewport position and zoom in order to make all content in the editor
-        fit in the window (the editor's area)."""
+        """Updates the editor's viewport (Shortcut: CTRL+F).
+
+        This changes the editor's viewport position and zoom in order to make all content in the editor
+        fit (be visible) in the window (the editor's area)."""
         imgui_node_editor.navigate_to_content()
+
+    def select_all_nodes(self):
+        """Makes all nodes become selected (Shortcut: CTRL+A)."""
+        for node in self.nodes:
+            imgui_node_editor.select_node(node.node_id, append=True)
 
     def clear(self):
         """Clears this system, deleting all nodes we contain."""
@@ -591,7 +607,7 @@ class NodeSystem:
         return new_nodes
 
     def undo_state(self):
-        """Undo the current state of this NodeSystem, returning to a previous state.
+        """Undo the current state of this NodeSystem, returning to a previous state (Shortcut: CTRL+Z).
 
         This only works if state-saving is enabled, and we have at least one previous state.
 
@@ -607,7 +623,7 @@ class NodeSystem:
         return True
 
     def redo_state(self):
-        """Redo a previously undone state of this NodeSystem.
+        """Redo a previously undone state of this NodeSystem (Shortcut: CTRL+Y).
 
         This only works if state-saving is enabled, and we have at least one "redo" state: if ``self.undo_state()``
         was called and no other states were saved with ``self.mark_state()`` until now.

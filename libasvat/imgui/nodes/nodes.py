@@ -380,8 +380,8 @@ class Node:
         The nodes will be repositioned after this according to their depth in the graph, and spaced between one another.
 
         Args:
-            allowed_outputs (list[type[NodePin]]): List or tuple of NodePin classes for output pins. Pins that are of these classes will be used to
-            walk through to the next nodes in the graph via their links.
+            allowed_outputs (list[type[NodePin]]): List or tuple of NodePin classes for output pins. Pins that are of these
+                classes will be used to walk through to the next nodes in the graph via their links.
         """
         if allowed_outputs is None:
             allowed_outputs = [NodePin]
