@@ -196,8 +196,9 @@ class EditorController:
             imgui.new_line()
         imgui.separator_text("Editor Commands")
         if self.show_tips:
-            imgui.text_wrapped(f"Tip #1: hovering the mouse over a property-name or value editor control usually shows a tooltip with more information.")
-            imgui.text_wrapped(f"Tip #2: most number controls can be edited by click & dragging the mouse over them.")
+            imgui.text_wrapped("Tip #1: hovering the mouse over a property-name or value editor control usually shows a tooltip with more information.")
+            imgui.text_wrapped("Tip #2: most number controls can be edited by click & dragging the mouse over them.")
+            imgui.text_wrapped("Tip #3: CTRL+Click in a number control allows to edit its value by typing in the number directly.")
         if not self.always_editing:
             with imgui_ctx.begin_horizontal(f"{self.obj}EditorControllerButtons"):
                 if adv_button("Cancel", tooltip="Closes the editor, cancelling the current edit and restoring the original values."):
