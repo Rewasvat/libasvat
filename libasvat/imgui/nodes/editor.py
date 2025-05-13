@@ -75,6 +75,8 @@ class NodeSystem:
         from libasvat.imgui.nodes.node_config import SystemConfig
         self._prev_states: list[SystemConfig] = []
         self._redo_states: list[SystemConfig] = []
+        self._node_creation_filter: str = ""
+        """Text used to filter possible nodes to create in the node creation menu. If empty, all nodes are allowed."""
 
     @property
     def selected_nodes(self):
@@ -430,6 +432,13 @@ class NodeSystem:
         """Renders the node editor's background context menu."""
         if imgui.begin_popup("BackgroundContextMenu"):
             pos = imgui.get_cursor_screen_pos()
+            imgui.text("Filter:")
+            imgui.same_line()
+            changed, new_filter_value = imgui.input_text("##", self._node_creation_filter)
+            imgui.set_item_tooltip("Filters nodes to create based on the name. If empty, all nodes are allowed.")
+            if changed:
+                self._node_creation_filter = new_filter_value
+            imgui.separator()
             new_node = self.draw_background_context_menu(self._create_new_node_to_pin)
             if new_node:
                 with self.block_state():
@@ -455,9 +464,9 @@ class NodeSystem:
         This method draws the controls its needs to display all options of nodes to create.
         If the user selects a node to create, this returns the new Node's instance.
 
-        The default implementation of this in NodeSystem uses `libasvat.imgui.general.object_creation_menu(Node)` to
-        draw a object creation menu based on all subclasses of the base Node.
-        Subclasses SHOULD overwrite this to implement their own "new node" logic!
+        The default implementation of this in NodeSystem uses ``libasvat.imgui.general.object_creation_menu(Node)`` to
+        draw a object creation menu based on all subclasses of the base Node, using our ``self.node_creation_menu_filter``
+        as filter. Subclasses can overwrite this to implement their own "new node" logic!
 
         Args:
             linked_to_pin (NodePin | None): The optional pin the user pulled a link from and selected to create a new node.
@@ -468,7 +477,24 @@ class NodeSystem:
             Node: new Node instance that was selected by the user to be created. The new node doesn't need to be added to this NodeSystem,
             the system will do that automatically. Can be None if nothing was created.
         """
-        return object_creation_menu(Node)
+        return object_creation_menu(Node, filter=self.node_creation_menu_filter)
+
+    def node_creation_menu_filter(self, cls: type[Node]):
+        """Checks if the given Node type is visible (to create) in our node-creation-menu, according to the node name filter selected
+        by the user.
+
+        This checks if the user's selected filter (our ``self._node_creation_filter`` text) is contained in the given type's
+        name (case-insensitive).
+
+        Args:
+            cls (type[Node]): Node type to check.
+
+        Returns:
+            bool: if true, the node type will be visible/selectable in the node-creation-menu.
+        """
+        if not self._node_creation_filter:
+            return True
+        return self._node_creation_filter.lower() in cls.__name__.lower()
 
     def show_label(self, text: str):
         """Shows a tooltip label at the cursor's current position.
