@@ -5,7 +5,7 @@ from libasvat.imgui.editors.controller import get_all_prop_values_for_storage, r
 from imgui_bundle import imgui_node_editor  # type: ignore
 
 
-# TODO: atualizar SystemConfig e NodeConfig pra invés de salvar a classe (tipo) em si do objeto, salvar node deles.
+# TODO: atualizar SystemConfig e NodeConfig pra invés de salvar a classe (tipo) em si do objeto, salvar nome deles.
 #   ai no instantiate podemos pegar todas subclasses de NodeSystem/Node pra achar a que tem o tal nome.
 #   - isso vai deixar o sistema de configs mais failsafe, pq:
 #       - caso uma classe tenha mudado de path, vai continuar funcionando invés de quebrar (e quebraria no pickle.load já)
