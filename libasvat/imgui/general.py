@@ -236,43 +236,74 @@ def is_user_creatable(cls: type):
     return not my_tags.get("not_user_creatable", False)
 
 
-# TODO: adicionar input-text pra filtrar nomes de classes disponiveis, com um separator pro resto do menu com os botoes pra criar.
-def object_creation_menu(cls: type, name_getter: Callable[[type], str] = None):
+def object_creation_menu(cls: type, name_getter: Callable[[type], str] = None, filter: Callable[[type], bool] = None):
     """Renders the contents for a menu that allows the user to create a new object, given the possible options.
 
     * Each menu item instantiates its associated type, without passing any arguments.
        * The created object is returned by this function.
-       * If the type has the ``@not_user_creatable`` then this button won't be available.
+       * If the type has the ``@not_user_creatable`` decorator then this button won't be available.
     * Subclasses of a type are positioned inside a ``{name} Types`` sub-menu.
     * Each item in the menu (creation button or sub-menu) has a tooltip with the docstring of the associated type.
 
     Args:
         cls (type): base type to render menu for.
-        name_getter (Callable[[type], str], optional): optional function that receives a type and returns the name of the type to display
-        in the menu. Defaults to None, which will directly use ``cls.__name__``.
+        name_getter (Callable[[type], str], optional): optional callable that receives a type and returns the name of the
+            type to display in the menu. Defaults to None, which will directly use each class's ``__name__``.
+        filter (Callable[[type], bool], optional): optional callable that receives a type and returns a boolean indicating
+            if the type can be displayed for the user to select. This only applies to the type itself: subclasses of
+            the type are checked separately. If None (the default), all types are allowed.
 
     Returns:
         any: the newly created object, if any. Guaranteed a subclass of the originally given CLS.
         None otherwise.
     """
     obj = None
+
     name = name_getter(cls) if name_getter is not None else cls.__name__
-    if is_user_creatable(cls):
-        if menu_item(name):
+    show_cls, show_subs = check_creatable_types(cls, filter=filter)
+    if show_cls:
+        if imgui.menu_item_simple(name):
             obj = cls()
         imgui.set_item_tooltip("Creates a object of this class.\n" + cls.__doc__)
 
     subs = cls.__subclasses__()
-    if len(subs) > 0:
+    if len(subs) > 0 and show_subs:
         subs_opened = imgui.begin_menu(f"{name} Types")
         imgui.set_item_tooltip(cls.__doc__)
         if subs_opened:
             for sub in subs:
-                sub_obj = object_creation_menu(sub, name_getter)
+                sub_obj = object_creation_menu(sub, name_getter, filter=filter)
                 if sub_obj is not None:
                     obj = sub_obj
             imgui.end_menu()
     return obj
+
+
+def check_creatable_types(cls: type, filter: Callable[[type], bool] = None):
+    """Checks if a given type (or any of its subclasses) is creatable by the user (see ``@not_user_creatable``)
+    and it passes the given filtering function.
+
+    Args:
+        cls (type): base type to render menu for.
+        filter (Callable[[type], bool], optional): optional callable that receives a type and returns a boolean indicating
+            if the type can be displayed for the user to select. This only applies to the type itself: subclasses of
+            the type are checked separately. If None (the default), all types are allowed.
+
+    Returns:
+        tuple[bool,bool]: a `(cls_ok, subs_ok)` boolean tuple, with `cls_ok` indicating that the given `cls` type itself is
+        creatable; and `subs_ok` indicating that `cls` has at least one subclass (at any depth) that is creatable.
+    """
+    has_cls = False
+    if is_user_creatable(cls) and (filter is None or filter(cls)):
+        has_cls = True
+
+    has_subs = False
+    for sub in cls.__subclasses__():
+        sub_cls, sub_subs = check_creatable_types(sub, filter=filter)
+        if sub_cls or sub_subs:
+            has_subs = True
+            break
+    return has_cls, has_subs
 
 
 @contextmanager
