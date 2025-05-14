@@ -1,9 +1,9 @@
 import os
 import libasvat.command_utils as cmd_utils
-import libasvat.imgui.type_editor as types
 from libasvat.imgui.math import Vector2
 from libasvat.imgui.general import drop_down
 from libasvat.imgui.colors import Colors
+from libasvat.imgui.editors import TypeDatabase, TypeEditor
 from libasvat.utils import get_all_files
 from contextlib import contextmanager
 from imgui_bundle import imgui
@@ -24,8 +24,8 @@ class FontID(str):
     """
 
 
-@types.TypeDatabase.register_editor_for_type(FontID)
-class FontIDEditor(types.TypeEditor):
+@TypeDatabase.register_editor_for_type(FontID)
+class FontIDEditor(TypeEditor):
     """Imgui TypeEditor for selecting a FontID value."""
 
     def __init__(self, config: dict):
@@ -249,6 +249,8 @@ class FontDatabase(metaclass=cmd_utils.Singleton):
             font (FontID): font ID to set up an alias to.
             alias (str): new custom made font-ID. A alias can only point to one single font.
         """
+        font = FontID(font)
+        alias = FontID(alias)
         prev_cache = self.get_cache(alias)
         if prev_cache:
             prev_cache.aliases.remove(alias)
@@ -272,6 +274,7 @@ class FontDatabase(metaclass=cmd_utils.Singleton):
         """
         if font is None:
             font = self.default_font
+        font = FontID(font)
         font = self._aliases.get(font, font)
         return self.fonts.get(font, None)
 

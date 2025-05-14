@@ -1,7 +1,7 @@
 import click
-import libasvat.imgui.type_editor as types
 from libasvat.imgui.nodes import Node, PinKind, NodeLink, NodeSystem
 from libasvat.imgui.math import Rectangle
+from libasvat.imgui.editors.controller import get_all_prop_values_for_storage, restore_prop_values_to_object
 from imgui_bundle import imgui_node_editor  # type: ignore
 
 
@@ -79,68 +79,6 @@ class PinLinkConfig:
         return [cls.from_link(link, node) for link in node.get_all_links()]
 
 
-def get_all_config_properties(node_class: type[Node]):
-    """Gets all "configurable" properties of a Node class type.
-
-    These properties are `ImguiProperties` (and subclasses), which define values from the Node that the user can edit
-    in the graph, thus configuring the node to his liking.
-
-    So when recreating a Node from the same class, if all configurable property values are the same, the node should behave
-    the same as a similar instance.
-
-    Args:
-        node_class (type[Node]): Node class to get properties from.
-
-    Returns:
-        dict[str,ImguiProperty]: a "property name" => "ImguiProperty object" dict with all configurable properties
-        of the Node class.
-    """
-    props = types.get_all_renderable_properties(node_class)
-    from libasvat.imgui.nodes.nodes_data import NodeDataProperty
-
-    def filter_prop(prop: types.ImguiProperty):
-        if isinstance(prop, NodeDataProperty):
-            # We don't save values from properties marked with `use_prop_value`, since these get their values directly from their getters,
-            # so nothing that would matter to set from here.
-            return not prop.use_prop_value
-        return True
-
-    return {k: p for k, p in props.items() if filter_prop(p)}
-
-
-def get_all_prop_values_for_storage(obj):
-    """Gets the values of all configurable properties of the given obj.
-
-    Configurable properties are ImguiProperties (and their subclasses) that are used to allow a user to configure the object.
-    See ``get_all_config_properties()``.
-
-    Args:
-        obj (any): Object to get config-properties values.
-
-    Returns:
-        dict[str, any]: a property-name => value dict.
-    """
-    props = get_all_config_properties(type(obj))
-    return {k: prop.get_value_from_obj(obj) for k, prop in props.items()}
-
-
-def restore_prop_values_to_object(obj, values: dict[str]):
-    """Restores the configurable property values to the given object.
-
-    It's expected that `values` is a dict returned by a previous call to ``get_all_prop_values_for_storage(object)``.
-
-    Args:
-        obj (any): the object to restore
-        values (dict[str]): the name=>value dict of property values.
-    """
-    props = get_all_config_properties(type(obj))
-    for key, value in values.items():
-        if key not in props:
-            click.secho(f"Class {type(obj)} no longer has '{key}' property to set.", fg="yellow")
-            continue
-        props[key].restore_value(obj, value)
-
-
 class NodeConfig:
     """Configuration data of a Node.
 
@@ -195,7 +133,9 @@ class NodeConfig:
         node.setup_from_config(self._custom_config_data)
 
         # Set node properties.
-        restore_prop_values_to_object(node, self._prop_values)
+        issues = restore_prop_values_to_object(node, self._prop_values)
+        for msg in issues:
+            click.secho(msg, fg="yellow")
 
         # Recreate links
         for link_info in self._links_info:

@@ -8,7 +8,7 @@ short_desc += " utility functions to more complex IMGUI (imgui-bundle) utility c
 
 setuptools.setup(
     name='libasvat',
-    version='1.0',
+    # Cant define the 'version' here since it'll be dynamically defined by pyproject.toml
     py_modules=["libasvat"],
     entry_points={},
     author="Fernando Omar Aluani",

@@ -1,10 +1,11 @@
-import libasvat.imgui.type_editor as types
+import types
 from imgui_bundle import imgui
-from libasvat.utils import get_all_properties
+from libasvat.utils import get_all_properties, adv_property
 from libasvat.imgui.nodes import Node, NodePin, NodeLink, PinKind
 from libasvat.imgui.colors import Colors
 from libasvat.imgui.math import Vector2
 from libasvat.imgui.general import menu_item
+from libasvat.imgui.editors import TypeDatabase, TypeEditor, ImguiProperty
 
 
 class DataPinState:
@@ -29,7 +30,7 @@ class DataPinState:
         self.value = None
         """Internal value of this pin state."""
         self.value_type = value_type
-        self.editor: types.TypeEditor = None
+        self.editor: TypeEditor = None
         self.setup_editor()
 
     @property
@@ -75,7 +76,7 @@ class DataPinState:
         """
         return tuple()
 
-    def setup_editor(self, editor: types.TypeEditor = None, config: dict = None):
+    def setup_editor(self, editor: TypeEditor = None, config: dict = None):
         """Sets up our TypeEditor instance, used for editing this state's value in IMGUI.
 
         Regardless of how the editor is setup, our parent Node can have the ``_update_<property name>_editor(editor)`` methods
@@ -92,7 +93,7 @@ class DataPinState:
         if editor is not None:
             self.editor = editor
         else:
-            self.editor = types.TypeDatabase().get_editor(self.type(), config)
+            self.editor = TypeDatabase().get_editor(self.type(), config)
 
     def on_delete(self):
         """Deletes this pin state. Called when the parent pin is deleted."""
@@ -137,7 +138,7 @@ class DataPin(NodePin):
         self._pin_tooltip = value
 
     @property
-    def accepted_input_types(self) -> type | types.types.UnionType | tuple[type]:
+    def accepted_input_types(self) -> type | types.UnionType | tuple[type]:
         """The types this Input DataPin can accept as links, either as a single type object, a union of types, or
         as a tuple of types. If a link being connected to this input pin is of a type (the output type) that is a subclass
         of one of these accepted input types, then the connection will be accepted.
@@ -248,10 +249,10 @@ class DataPin(NodePin):
         return f"{self.pin_kind.name.capitalize()} Data {self.pin_name}"
 
 
-class NodeDataProperty(types.ImguiProperty):
+class NodeDataProperty(ImguiProperty):
     """Advanced python Property that associates a DataPin with the property.
 
-    This also expands on type_editor.ImguiProperty, which allows the property to have an associated TypeEditor for editing its value.
+    This also expands on editors.ImguiProperty, which allows the property to have an associated TypeEditor for editing its value.
     The property's TypeEditor is used by the DataPin as its editor, to change its value.
 
     The associated DataPin is configured (name, pin-kind, type, editor (and color), tooltip, initial value, etc) according to metadata
@@ -363,7 +364,7 @@ def input_property(**kwargs):
     Only the property getter is required to define name, type and docstring.
     The setter is defined automatically by the NodeDataProperty."""
     kwargs.update(pin_kind=PinKind.input)
-    return types.adv_property(kwargs, NodeDataProperty)
+    return adv_property(kwargs, NodeDataProperty)
 
 
 def output_property(**kwargs):
@@ -377,7 +378,7 @@ def output_property(**kwargs):
     Only the property getter is required to define name, type and docstring.
     The setter is defined automatically by the NodeDataProperty."""
     kwargs.update(pin_kind=PinKind.output)
-    return types.adv_property(kwargs, NodeDataProperty)
+    return adv_property(kwargs, NodeDataProperty)
 
 
 def create_data_pins_from_properties(node: Node):
