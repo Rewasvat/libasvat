@@ -1,4 +1,5 @@
 import math
+from contextlib import nullcontext
 from typing import Callable, TYPE_CHECKING
 from libasvat.imgui.colors import Color, Colors
 from libasvat.imgui.math import Vector2, Rectangle
@@ -68,6 +69,15 @@ class Node:
         pos = imgui_node_editor.get_node_position(self.node_id)
         size = imgui_node_editor.get_node_size(self.node_id)
         return Rectangle(pos, size)
+
+    def set_position(self, pos: Vector2):
+        """Sets this node's position in the node-editor's graph canvas.
+
+        Args:
+            pos (Vector2): position to set, in node-editor canvas space (see ``imgui_node_editor.screen_to_canvas()``).
+        """
+        with self._block_state():
+            imgui_node_editor.set_node_position(self.node_id, pos)
 
     def draw_node(self):
         """Draws the node in imgui's Node Editor.
@@ -208,6 +218,14 @@ class Node:
         """Gets a list of all output pins of this node."""
         return self._outputs
 
+    @property
+    def all_pins(self):
+        """Gets all pins from this node.
+
+        This is equivalent to ``self.get_input_pins() + self.get_output_pins()``
+        """
+        return self.get_input_pins() + self.get_output_pins()
+
     def get_input_pin(self, name: str, pin_type: type['NodePin'] | tuple['NodePin'] = None):
         """Gets our INPUT pin with the given name.
 
@@ -312,12 +330,13 @@ class Node:
         Implementations should override this to add their logic for when a node is deleted.
         Default deletes its pins, removes the node from its editor, and recycles its ID.
         """
-        for pin in self.get_input_pins() + self.get_output_pins():
-            pin.delete()
-        if self.system:
-            self.system.remove_node(self)
-            self.system = None
-        nodes_id_generator().recycle(self.node_id.id())
+        with self._block_state():
+            for pin in self.get_input_pins() + self.get_output_pins():
+                pin.delete()
+            if self.system:
+                self.system.remove_node(self)
+                self.system = None
+            nodes_id_generator().recycle(self.node_id.id())
 
     def walk_in_graph(self, callback: Callable[['Node', int], bool], allowed_outputs: list[type['NodePin']], starting_level=0,
                       walked_nodes: set['Node'] = None):
@@ -345,14 +364,15 @@ class Node:
             walked_nodes = set()
         if self in walked_nodes:
             return
-        walked_nodes.add(self)
-        ok = callback(self, starting_level)
-        if not ok:
-            return
-        for pin in self.get_output_pins():
-            if isinstance(pin, tuple(allowed_outputs)):
-                for link in pin.get_all_links():
-                    link.end_pin.parent_node.walk_in_graph(callback, allowed_outputs, starting_level + 1, walked_nodes)
+        with self._block_state():
+            walked_nodes.add(self)
+            ok = callback(self, starting_level)
+            if not ok:
+                return
+            for pin in self.get_output_pins():
+                if isinstance(pin, tuple(allowed_outputs)):
+                    for link in pin.get_all_links():
+                        link.end_pin.parent_node.walk_in_graph(callback, allowed_outputs, starting_level + 1, walked_nodes)
 
     def reposition_nodes(self, allowed_outputs: list[type['NodePin']] = None):
         """Rearranges all nodes following this one, from links of the allowed output pins.
@@ -360,8 +380,8 @@ class Node:
         The nodes will be repositioned after this according to their depth in the graph, and spaced between one another.
 
         Args:
-            allowed_outputs (list[type[NodePin]]): List or tuple of NodePin classes for output pins. Pins that are of these classes will be used to
-            walk through to the next nodes in the graph via their links.
+            allowed_outputs (list[type[NodePin]]): List or tuple of NodePin classes for output pins. Pins that are of these
+                classes will be used to walk through to the next nodes in the graph via their links.
         """
         if allowed_outputs is None:
             allowed_outputs = [NodePin]
@@ -406,7 +426,7 @@ class Node:
 
             position = Vector2(x, y) - node.node_area.size * 0.5
             if level > 0:
-                imgui_node_editor.set_node_position(node.node_id, position + offset)
+                node.set_position(position + offset)
             else:
                 offset = node.node_area.position - position
             return True
@@ -454,12 +474,36 @@ class Node:
         """
         return {}
 
+    def _block_state(self, mark_at_start=True, mark_at_end=False):
+        """Utility WITH context-manager to block state saving.
+
+        If our parent ``self.system`` is already set, this uses the NodeSystem's ``block_state(mark_at_start, mark_at_end)``
+        context-manager to disable state-saving, yield, and finally re-enable state-saving. If the parent system isn't
+        set, this returns a ``nullcontext``.
+
+        Essentially this will block any calls to ``NodeSystem.mark_state()``, ``NodeSystem.undo_state()`` and
+        ``NodeSystem.redo_state()`` to work while this context-manager is running.
+
+        Thus this can be used easily to block state-saving for several operations, and then save a state
+        when all changes were done, so we end up with a single state with several changes instead of several
+        states with one change in each.
+
+        Args:
+            mark_at_start (bool, optional): If true, we'll automatically execute ``NodeSystem.mark_state()`` when entering
+                the context-manager, before disabling state-saving. Defaults to True.
+            mark_at_end (bool, optional): If true, we'll automatically execute ``NodeSystem.mark_state()`` when exiting
+                the context-manager, after re-enabling state-saving. Defaults to False.
+        """
+        if self.system:
+            return self.system.block_state(mark_at_start=mark_at_start, mark_at_end=mark_at_end)
+        else:
+            return nullcontext()
+
 
 PinKind = imgui_node_editor.PinKind
 """Alias for ``imgui_node_editor.PinKind``: enumeration of possible pin kinds."""
 
 
-# TODO: highlight pins (across all nodes) that can be connected to when pulling a new link.
 class NodePin:
     """An Input or Output Pin in a Node.
 
@@ -480,7 +524,7 @@ class NodePin:
         self.default_link_thickness: float = 1
         """Default thickness for link lines created from this pin (used when this is an output pin)."""
         self.can_be_deleted: bool = False
-        """If this object can be deleted by user-interaction."""
+        """If this pin can be deleted by user-interaction."""
         self.pin_tooltip: str = None
         """Tooltip text to display when this pin is hovered by the user. If none, no tooltip will be displayed."""
         self.prettify_name = False
@@ -488,6 +532,21 @@ class NodePin:
 
         When true, some characters in the name (such as ``_``) are replaced by spaces, and all words are capitalized.
         This DOES NOT change our ``self.pin_name`` attribute. It merely changes how the pin_name is drawn.
+        """
+        self.highlight_color: Color = None
+        """Highlight color for this pin.
+
+        When set (not None), the pin's area will be highlighted with this color, and then the color will be set to None.
+        Thus to keep the pin highlighted over time, this attribute needs to be set every frame.
+
+        The highlight consists of drawing the pin's area with this color. First as a filled rect with 20% alpha of this
+        color, then as a outline rect with this color.
+        """
+        self.pin_area: Rectangle = Rectangle()
+        """Rect area of this pin.
+
+        It contains the pin's contents, and is equal to the area used for highlighting the pin when hovered.
+        This is updated every frame after drawing the pin.
         """
 
     def draw_node_pin(self):
@@ -497,6 +556,12 @@ class NodePin:
         """
         imgui_node_editor.begin_pin(self.pin_id, self.pin_kind)
         imgui.begin_horizontal(f"{repr(self)}NodePin")
+        if self.highlight_color:
+            rounding = imgui_node_editor.get_style().pin_rounding
+            self.pin_area.draw(self.highlight_color.alpha_copy(0.2), is_filled=True, rounding=rounding)
+            self.pin_area.draw(self.highlight_color, rounding=rounding)
+            self.highlight_color = None
+
         name = self.pin_name
         if self.prettify_name:
             name = " ".join(s.capitalize() for s in name.split("_"))
@@ -509,6 +574,9 @@ class NodePin:
             imgui.text_unformatted(name)
 
         imgui.end_horizontal()
+        self.pin_area.position = imgui.get_item_rect_min()
+        self.pin_area.size = imgui.get_item_rect_size()
+
         imgui_node_editor.suspend()
         if imgui.is_item_hovered(imgui.HoveredFlags_.for_tooltip) and self.pin_tooltip:
             imgui.set_tooltip(self.pin_tooltip)
@@ -606,9 +674,10 @@ class NodePin:
         """
         if not self.is_link_possible(pin) or not pin.is_link_possible(self):
             return
-        link = self._add_new_link(pin)
-        self.on_new_link_added(link)
-        pin.on_new_link_added(link)
+        with self.parent_node._block_state():
+            link = self._add_new_link(pin)
+            self.on_new_link_added(link)
+            pin.on_new_link_added(link)
         return link
 
     def delete_link_to(self, pin: 'NodePin'):
@@ -633,7 +702,9 @@ class NodePin:
 
     def delete_all_links(self):
         """Removes all links from this pin."""
-        imgui_node_editor.break_links(self.pin_id)
+        with self.parent_node._block_state():
+            for link in list(self._links.values()):
+                link.delete()
 
     def _add_new_link(self, pin: 'NodePin') -> 'NodeLink':
         """Internal method to create a new link between this and the given pin, and add it
@@ -770,7 +841,8 @@ class NodeLink:
         """Deletes this link.
 
         Removes it from both start/end pins, and recycles our ID."""
-        self.start_pin._remove_link(self.end_pin)
+        with self.start_pin.parent_node._block_state():
+            self.start_pin._remove_link(self.end_pin)
         nodes_id_generator().recycle(self.link_id.id())
 
     def __str__(self):

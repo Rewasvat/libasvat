@@ -5,7 +5,7 @@ from libasvat.imgui.editors.controller import get_all_prop_values_for_storage, r
 from imgui_bundle import imgui_node_editor  # type: ignore
 
 
-# TODO: atualizar SystemConfig e NodeConfig pra invés de salvar a classe (tipo) em si do objeto, salvar node deles.
+# TODO: atualizar SystemConfig e NodeConfig pra invés de salvar a classe (tipo) em si do objeto, salvar nome deles.
 #   ai no instantiate podemos pegar todas subclasses de NodeSystem/Node pra achar a que tem o tal nome.
 #   - isso vai deixar o sistema de configs mais failsafe, pq:
 #       - caso uma classe tenha mudado de path, vai continuar funcionando invés de quebrar (e quebraria no pickle.load já)
@@ -127,7 +127,7 @@ class NodeConfig:
         # apparently work.
         #   --> Theory is that this "corrupted saved positions" happened when AppWindow using these nodes changed names (which kind of fucked up
         #       session memory and persisted window data)
-        imgui_node_editor.set_node_position(node.node_id, self._area.position)
+        node.set_position(self._area.position)
 
         # Setup node's custom data.
         node.setup_from_config(self._custom_config_data)
@@ -175,12 +175,24 @@ class SystemConfig:
         """Gets the number of nodes this NodeSystem config has"""
         return len(self._nodes_configs)
 
-    def instantiate(self):
+    def instantiate(self, override_system: NodeSystem = None):
         """Creates a new NodeSystem instance based on this config.
 
+        Args:
+            override_system (NodeSystem, optional): If given, this method will override all nodes in the `override_system`
+                with the nodes this SystemConfig creates, instead of creating a new NodeSystem instance. Defaults to None.
+
+        Raises:
+            TypeError: error when `override_system` is given, but doesn't match our expected NodeSystem type.
+
         Returns:
-            NodeSystem: new instance
+            NodeSystem: new instance, or the same as `override_system` (if given).
         """
+        if override_system:
+            # Check if system type matches.
+            if type(override_system) is not self._system_class:
+                raise TypeError(f"Given system type '{type(override_system)}' doesn't match expected type '{self._system_class}'")
+
         # Recreate all our nodes
         refs_table = {}
         nodes: list[Node] = []
@@ -188,8 +200,15 @@ class SystemConfig:
             node = config.instantiate(refs_table)
             nodes.append(node)
 
-        # Recreate the UISystem
-        system = self._system_class(self._name, nodes)
+        # Recreate/override the NodeSystem
+        if override_system:
+            system = override_system
+            # TODO: maybe try to replace/update existing nodes (if/when possible), instead of deleting/recreating everything?
+            system.clear()
+            for node in nodes:
+                system.add_node(node)
+        else:
+            system = self._system_class(self._name, nodes)
         return system
 
     @classmethod

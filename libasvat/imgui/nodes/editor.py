@@ -1,8 +1,16 @@
-from typing import Callable
-from libasvat.imgui.colors import Colors
-from libasvat.imgui.general import menu_item, object_creation_menu
+import click
+import codecs
+import pickle
+import traceback
+from contextlib import contextmanager
+from libasvat.imgui.colors import Colors, Color
+from libasvat.imgui.general import object_creation_menu, adv_button
 from libasvat.imgui.nodes.nodes import Node, NodePin, NodeLink, PinKind
 from imgui_bundle import imgui, imgui_node_editor  # type: ignore
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from libasvat.imgui.nodes.node_config import SystemConfig
 
 
 AllIDTypes = imgui_node_editor.NodeId | imgui_node_editor.PinId | imgui_node_editor.LinkId
@@ -23,10 +31,6 @@ def get_all_links_from_nodes(nodes: list[Node]):
     return list(dict.fromkeys(links))
 
 
-# TODO: copy/paste/cut (com suporte aos atalhos de teclado)
-#   - testar o role de shortcuts do imgui-node-editor
-# TODO: esquema de salvar estado pra ter CTRL+Z (UNDO)
-# TODO: atalho de teclado pro Fit To Window
 class NodeSystem:
     """Represents a Node Editor system.
 
@@ -52,6 +56,32 @@ class NodeSystem:
         self._selected_menu_node: Node = None
         self._selected_menu_pin: NodePin = None
         self._selected_menu_link: NodeLink = None
+        self.link_option_ok_hightlight: Color = Colors.green
+        """Color to highlight pins that accept linking to the pin the user is dragging a link from.
+
+        When a user drags a link from a pin, this color will be used to highlight all pins that can be linked to the pin the user is dragging from.
+
+        If None, then no highlight will be shown. Defaults to green.
+        """
+        self.link_option_invalid_hightlight: Color = None
+        """Color to highlight pins that do not accept linking to the pin the user is dragging a link from.
+
+        When a user drags a link from a pin, this color will be used to highlight all pins that cannot be linked to the pin the user is dragging from.
+
+        If None, then no highlight will be shown. Defaults to None.
+        """
+        self._state_saving_block_count: int = 0
+        """Internal counter of state-saving blocks. State-saving should be enabled if this is 0."""
+        from libasvat.imgui.nodes.node_config import SystemConfig
+        self._prev_states: list[SystemConfig] = []
+        self._redo_states: list[SystemConfig] = []
+        self._node_creation_filter: str = ""
+        """Text used to filter possible nodes to create in the node creation menu. If empty, all nodes are allowed."""
+
+    @property
+    def selected_nodes(self):
+        """Returns a list of all nodes in this system that are selected by the user."""
+        return [node for node in self.nodes if node.is_selected]
 
     def add_node(self, node: Node):
         """Adds a node to this NodeSystem. This will show the node in the editor, and allow it to be edited/updated.
@@ -63,8 +93,9 @@ class NodeSystem:
             node (Node): Node to add to this editor. If node is already on the editor, does nothing.
         """
         if node not in self.nodes:
-            self.nodes.append(node)
-            node.system = self
+            with self.block_state():
+                self.nodes.append(node)
+                node.system = self
 
     def remove_node(self, node: Node):
         """Removes the given node from this NodeSystem. The node will no longer be shown in the editor, and no longer updateable
@@ -74,8 +105,9 @@ class NodeSystem:
             node (Node): Node to remove from this editor. If node isn't in this editor, does nothing.
         """
         if node in self.nodes:
-            self.nodes.remove(node)
-            node.system = None
+            with self.block_state():
+                self.nodes.remove(node)
+                node.system = None
 
     def _compare_ids(self, a_id: AllIDTypes, b_id: AllIDTypes | int):
         """Compares a imgui-node-editor ID object to another to check if they match.
@@ -151,14 +183,13 @@ class NodeSystem:
         imgui.begin_child(f"{repr(self)}NodeSystemDetailsPanel")
         has_selection = False
 
-        for node in self.nodes:
-            if node.is_selected:
-                has_selection = True
-                imgui.push_id(repr(node))
-                if imgui.collapsing_header(node.node_title):
-                    node.render_edit_details()
-                    imgui.spacing()
-                imgui.pop_id()
+        for node in self.selected_nodes:
+            has_selection = True
+            imgui.push_id(repr(node))
+            if imgui.collapsing_header(node.node_title):
+                node.render_edit_details()
+                imgui.spacing()
+            imgui.pop_id()
 
         if not has_selection:
             imgui.text_wrapped("Select Nodes to display & edit their details here.")
@@ -187,6 +218,8 @@ class NodeSystem:
             self.handle_node_creation_interactions()
             # Step 2-B) Handle deletion action of links
             self.handle_node_deletion_interactions()
+            # Step 2-C) Handle shortcuts (copy/cut/paste)
+            self.handle_node_shortcut_interactions()
 
         imgui.set_cursor_screen_pos(backup_pos)  # NOTE: Pq? Tinha isso nos exemplos, mas não parece fazer diff.
 
@@ -222,6 +255,13 @@ class NodeSystem:
                 new_pin = self.find_pin(new_pin_id)
                 if new_pin is not None:
                     self.show_label("Create Node (linked as possible to this pin)")
+                    # Check and set pin highlights for linking
+                    for node in self.nodes:
+                        for pin in node.all_pins:
+                            if new_pin.can_link_to(pin)[0]:
+                                pin.highlight_color = self.link_option_ok_hightlight
+                            else:
+                                pin.highlight_color = self.link_option_invalid_hightlight
 
                 if imgui_node_editor.accept_new_item():
                     imgui_node_editor.suspend()
@@ -233,13 +273,15 @@ class NodeSystem:
     def handle_node_deletion_interactions(self):
         """Handles node and link deletion interactions from the node editor."""
         if imgui_node_editor.begin_delete():
+            nodes_to_delete: list[Node] = []
+            links_to_delete: list[NodeLink] = []
             deleted_node_id = imgui_node_editor.NodeId()
             while imgui_node_editor.query_deleted_node(deleted_node_id):
                 node = self.find_node(deleted_node_id)
                 if node and node.can_be_deleted:
                     if imgui_node_editor.accept_deleted_item():
                         # Node implementation should handle removing itself from the list that supplies this editor with nodes.
-                        node.delete()
+                        nodes_to_delete.append(node)
                 else:
                     imgui_node_editor.reject_deleted_item()
 
@@ -251,8 +293,34 @@ class NodeSystem:
                     # Then remove link from your data.
                     link = self.find_link(deleted_link_id)
                     if link:
+                        links_to_delete.append(link)
+
+            if len(nodes_to_delete) > 0 or len(links_to_delete) > 0:
+                with self.block_state():
+                    for node in nodes_to_delete:
+                        node.delete()
+                    for link in links_to_delete:
                         link.delete()
             imgui_node_editor.end_delete()
+
+    def handle_node_shortcut_interactions(self):
+        """Handles shortcut interactions from the node editor."""
+        if imgui.shortcut(imgui.Key.mod_ctrl | imgui.Key.z):
+            self.undo_state()
+        if imgui.shortcut(imgui.Key.mod_ctrl | imgui.Key.y):
+            self.redo_state()
+        if imgui.shortcut(imgui.Key.mod_ctrl | imgui.Key.f):
+            self.fit_to_window()
+        if imgui.shortcut(imgui.Key.mod_ctrl | imgui.Key.a):
+            self.select_all_nodes()
+        if imgui_node_editor.begin_shortcut():
+            if imgui_node_editor.accept_copy():
+                self.copy_nodes()
+            if imgui_node_editor.accept_cut():
+                self.cut_nodes()
+            if imgui_node_editor.accept_paste():
+                self.paste_nodes()
+            imgui_node_editor.end_shortcut()
 
     def handle_node_context_menu_interactions(self):
         """Handles interactions and rendering of all context menus for the node editor."""
@@ -297,7 +365,7 @@ class NodeSystem:
                 imgui.text_colored(Colors.red, "Invalid Node")
             if node and node.can_be_deleted:
                 imgui.separator()
-                if menu_item("Delete"):
+                if imgui.menu_item_simple("Delete"):
                     imgui_node_editor.delete_node(node.node_id)
             imgui.end_popup()
 
@@ -319,10 +387,10 @@ class NodeSystem:
                 imgui.text_colored(Colors.red, "Invalid Pin")
             if pin:
                 imgui.separator()
-                if menu_item("Remove All Links"):
+                if imgui.menu_item_simple("Remove All Links"):
                     pin.delete_all_links()
                 if pin.can_be_deleted:
-                    if menu_item("Delete"):
+                    if imgui.menu_item_simple("Delete"):
                         pin.delete()
             imgui.end_popup()
 
@@ -343,7 +411,7 @@ class NodeSystem:
             else:
                 imgui.text_colored(Colors.red, "Invalid link")
             imgui.separator()
-            if menu_item("Delete"):
+            if imgui.menu_item_simple("Delete"):
                 imgui_node_editor.delete_link(link.link_id)
             imgui.end_popup()
 
@@ -364,16 +432,30 @@ class NodeSystem:
         """Renders the node editor's background context menu."""
         if imgui.begin_popup("BackgroundContextMenu"):
             pos = imgui.get_cursor_screen_pos()
+            imgui.text("Filter:")
+            imgui.same_line()
+            changed, new_filter_value = imgui.input_text("##", self._node_creation_filter)
+            imgui.set_item_tooltip("Filters nodes to create based on the name. If empty, all nodes are allowed.")
+            if changed:
+                self._node_creation_filter = new_filter_value
+            imgui.separator()
             new_node = self.draw_background_context_menu(self._create_new_node_to_pin)
             if new_node:
-                self.add_node(new_node)
-                if self._create_new_node_to_pin:
-                    self.try_to_link_node_to_pin(new_node, self._create_new_node_to_pin)
-                imgui_node_editor.set_node_position(new_node.node_id, imgui_node_editor.screen_to_canvas(pos))
+                with self.block_state():
+                    self.add_node(new_node)
+                    if self._create_new_node_to_pin:
+                        self.try_to_link_node_to_pin(new_node, self._create_new_node_to_pin)
+                    new_node.set_position(imgui_node_editor.screen_to_canvas(pos))
             if self._create_new_node_to_pin is None:
                 imgui.separator()
-                if menu_item("Fit to Window"):
+                if adv_button("Fit to Window", tooltip=self.fit_to_window.__doc__, in_menu=True):
                     self.fit_to_window()
+                if adv_button("Undo", tooltip=self.undo_state.__doc__, in_menu=True):
+                    self.undo_state()
+                if adv_button("Redo", tooltip=self.redo_state.__doc__, in_menu=True):
+                    self.redo_state()
+                if adv_button("Select All", tooltip=self.select_all_nodes.__doc__, in_menu=True):
+                    self.select_all_nodes()
             imgui.end_popup()
 
     def draw_background_context_menu(self, linked_to_pin: NodePin | None) -> Node | None:
@@ -382,9 +464,9 @@ class NodeSystem:
         This method draws the controls its needs to display all options of nodes to create.
         If the user selects a node to create, this returns the new Node's instance.
 
-        The default implementation of this in NodeSystem uses `libasvat.imgui.general.object_creation_menu(Node)` to
-        draw a object creation menu based on all subclasses of the base Node.
-        Subclasses SHOULD overwrite this to implement their own "new node" logic!
+        The default implementation of this in NodeSystem uses ``libasvat.imgui.general.object_creation_menu(Node)`` to
+        draw a object creation menu based on all subclasses of the base Node, using our ``self.node_creation_menu_filter``
+        as filter. Subclasses can overwrite this to implement their own "new node" logic!
 
         Args:
             linked_to_pin (NodePin | None): The optional pin the user pulled a link from and selected to create a new node.
@@ -395,7 +477,24 @@ class NodeSystem:
             Node: new Node instance that was selected by the user to be created. The new node doesn't need to be added to this NodeSystem,
             the system will do that automatically. Can be None if nothing was created.
         """
-        return object_creation_menu(Node)
+        return object_creation_menu(Node, filter=self.node_creation_menu_filter)
+
+    def node_creation_menu_filter(self, cls: type[Node]):
+        """Checks if the given Node type is visible (to create) in our node-creation-menu, according to the node name filter selected
+        by the user.
+
+        This checks if the user's selected filter (our ``self._node_creation_filter`` text) is contained in the given type's
+        name (case-insensitive).
+
+        Args:
+            cls (type[Node]): Node type to check.
+
+        Returns:
+            bool: if true, the node type will be visible/selectable in the node-creation-menu.
+        """
+        if not self._node_creation_filter:
+            return True
+        return self._node_creation_filter.lower() in cls.__name__.lower()
 
     def show_label(self, text: str):
         """Shows a tooltip label at the cursor's current position.
@@ -408,7 +507,7 @@ class NodeSystem:
         imgui_node_editor.resume()
 
     def try_to_link_node_to_pin(self, node: Node, pin: NodePin):
-        """Tries to given pin to any acceptable opposite pin in the given node.
+        """Tries to link given pin to any acceptable opposite pin in the given node.
 
         Args:
             node (Node): The node to link to.
@@ -449,9 +548,16 @@ class NodeSystem:
         return area
 
     def fit_to_window(self):
-        """Changes the editor's viewport position and zoom in order to make all content in the editor
-        fit in the window (the editor's area)."""
+        """Updates the editor's viewport (Shortcut: CTRL+F).
+
+        This changes the editor's viewport position and zoom in order to make all content in the editor
+        fit (be visible) in the window (the editor's area)."""
         imgui_node_editor.navigate_to_content()
+
+    def select_all_nodes(self):
+        """Makes all nodes become selected (Shortcut: CTRL+A)."""
+        for node in self.nodes:
+            imgui_node_editor.select_node(node.node_id, append=True)
 
     def clear(self):
         """Clears this system, deleting all nodes we contain."""
@@ -459,3 +565,181 @@ class NodeSystem:
             node.delete()
             node.system = None
         self.nodes.clear()
+
+    def copy_nodes(self):
+        """Copies the selected nodes from this system to the clipboard.
+
+        Only nodes that can be deleted are copied.
+
+        Returns:
+            list[NodeConfig]: list of NodeConfig objects that represent the nodes in the clipboard.
+        """
+        from libasvat.imgui.nodes.node_config import NodeConfig
+        configs: list[NodeConfig] = []
+        for node in self.selected_nodes:
+            if node.can_be_deleted:
+                node_config = NodeConfig.from_node(node)
+                configs.append(node_config)
+
+        try:
+            configs_str = codecs.encode(pickle.dumps(configs), "base64").decode()
+        except Exception:
+            click.secho(f"Failed to save NodeConfig data to the clipboard!\n{traceback.format_exc()}", fg="red")
+            configs_str = ""
+        imgui.set_clipboard_text(configs_str)
+
+        return configs
+
+    def cut_nodes(self):
+        """Cuts (copies and then deletes) the selected nodes from this system to the clipboard.
+
+        Only nodes that can be deleted are cut.
+
+        Returns:
+            list[NodeConfig]: list of NodeConfig objects that represent the nodes in the clipboard.
+        """
+        configs = self.copy_nodes()
+        with self.block_state():
+            for node in self.selected_nodes:
+                if node.can_be_deleted:
+                    node.delete()
+        return configs
+
+    def paste_nodes(self):
+        """Pastes the nodes from the clipboard into this system.
+
+        Returns:
+            list[Node]: list of Node objects that were pasted into this system.
+        """
+        from libasvat.imgui.nodes.node_config import NodeConfig
+        configs_str = imgui.get_clipboard_text()
+        if not configs_str:
+            return []
+
+        try:
+            configs: list[NodeConfig] = pickle.loads(codecs.decode(configs_str.encode(), "base64"))
+        except Exception:
+            click.secho(f"Failed to load NodeConfig data from the clipboard!\n{traceback.format_exc()}", fg="red")
+            configs = []
+
+        refs_table = {}
+        new_nodes: list[Node] = []
+        with self.block_state():
+            for config in configs:
+                node = config.instantiate(refs_table)
+                self.add_node(node)
+                new_nodes.append(node)
+
+        return new_nodes
+
+    def undo_state(self):
+        """Undo the current state of this NodeSystem, returning to a previous state (Shortcut: CTRL+Z).
+
+        This only works if state-saving is enabled, and we have at least one previous state.
+
+        The current state is stored in our "redo" state list. The entire state of this system
+        will be overriden, potentially changing all nodes, their properties and their links.
+        """
+        if not self.is_state_saving_enabled or len(self._prev_states) <= 0:
+            return False
+        from libasvat.imgui.nodes.node_config import SystemConfig
+        self._redo_states.append(SystemConfig.from_system(self))
+        state = self._prev_states.pop()
+        self._apply_saved_state(state)
+        return True
+
+    def redo_state(self):
+        """Redo a previously undone state of this NodeSystem (Shortcut: CTRL+Y).
+
+        This only works if state-saving is enabled, and we have at least one "redo" state: if ``self.undo_state()``
+        was called and no other states were saved with ``self.mark_state()`` until now.
+
+        The current state is stores in our previous states list. The entire state of this system
+        will be overriden, potentially changing all nodes, their properties and their links.
+        """
+        if not self.is_state_saving_enabled or len(self._redo_states) <= 0:
+            return False
+        from libasvat.imgui.nodes.node_config import SystemConfig
+        self._prev_states.append(SystemConfig.from_system(self))
+        state = self._redo_states.pop()
+        self._apply_saved_state(state)
+        return True
+
+    def mark_state(self):
+        """Marks (saves) the current state of this Node System to our list of previous states.
+
+        This only works if state saving is enabled (see ``self.is_state_saving_enabled``) and will
+        also clear the list of "redo" states.
+
+        Usually this is called _before_ doing anything that would change the state of this NodeSystem,
+        because then the previous state is saved, while the current state is the one after the change.
+        """
+        from libasvat.imgui.nodes.node_config import SystemConfig
+        if self.is_state_saving_enabled:
+            config = SystemConfig.from_system(self)
+            self._prev_states.append(config)
+            self._redo_states.clear()
+
+    @contextmanager
+    def block_state(self, mark_at_start=True, mark_at_end=False):
+        """WITH context-manager to block state saving.
+
+        This context-manager calls ``self.disable_state_saving()``, then yields, and finally
+        calls ``self.enable_state_saving()``. Essentially this will block any calls to ``self.mark_state()``,
+        ``self.undo_state()`` and ``self.redo_state()`` to work while this context-manager is running.
+
+        Thus this can be used easily to block state-saving for several operations, and then save a state
+        when all changes were done, so we end up with a single state with several changes instead of several
+        states with one change in each.
+
+        Args:
+            mark_at_start (bool, optional): If true, we'll automatically execute ``self.mark_state()`` when entering
+                the context-manager, before disabling state-saving. Defaults to True.
+            mark_at_end (bool, optional): If true, we'll automatically execute ``self.mark_state()`` when exiting
+                the context-manager, after re-enabling state-saving. Defaults to False.
+        """
+        if mark_at_start:
+            self.mark_state()
+        self.disable_state_saving()
+        yield
+        self.enable_state_saving()
+        if mark_at_end:
+            self.mark_state()
+
+    def enable_state_saving(self):
+        """Tries to enable state-saving (see ``self.is_state_saving_enabled``).
+
+        This decrements our internal counter of "state-saving blocks". When the counter is 0 (no blocks), state-saving
+        is enabled. This can't decrement our counter to be lesser than 0.
+        """
+        self._state_saving_block_count = max(self._state_saving_block_count - 1, 0)
+
+    def disable_state_saving(self):
+        """Disables state-saving (see ``self.is_state_saving_enabled``).
+
+        This increments our internal counter of "state-saving blocks". When the counter is 0 (no blocks), state-saving
+        is enabled. Therefore a single increment (single call to this method), will disable saving. An opposite call
+        to ``self.enable_state_saving()`` will then decrement the counter and enable saving.
+        """
+        self._state_saving_block_count += 1
+
+    @property
+    def is_state_saving_enabled(self):
+        """Checks if state-saving is enabled: if our internal counter of "state-saving blocks" is 0 [**READ-ONLY**].
+
+        The counter is incremented/decremented with ``self.disable_state_saving()``/``self.enable_state_saving()``.
+        Thus when one call to disable() is made, an opposite call to enable() is required to re-enable state-saving.
+
+        This way, its possible for chained code-blocks to independently disable/enable state-saving multiple times
+        as required, and the state-saving status will be properly maintained by the NodeSystem.
+        """
+        return self._state_saving_block_count == 0
+
+    def _apply_saved_state(self, state: 'SystemConfig'):
+        """Overrides the current state of this NodeSystem with the given state.
+
+        This may change all nodes, their properties and links. Even if a node/prop/link existed with the same
+        value before, it may be deleted and recreated in this operation.
+        """
+        with self.block_state(mark_at_start=False, mark_at_end=False):
+            state.instantiate(self)
