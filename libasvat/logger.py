@@ -48,7 +48,9 @@ class LogMessage:
 
     def draw(self):
         """Draws this log message using IMGUI."""
+        imgui.push_text_wrap_pos()
         imgui.text_colored(self.logtype.color_rgba, str(self))
+        imgui.pop_text_wrap_pos()
 
     def __str__(self):
         if self.tag is not None and self.tag != "":
@@ -126,3 +128,55 @@ class Logger:
         for msg_data in messages:
             obj.messages.append(LogMessage.from_json(msg_data))
         return obj
+
+    def copy(self):
+        """Copies this Logger, returning a brand new Logger instance with the same tag/messages."""
+        return self.__class__.from_json(self.to_json())
+
+    def draw(self, title: str = None, use_tree_node=False, use_indent=False, use_region=True, region_size: imgui.ImVec2 = None):
+        """Draws this logger using IMGUI.
+
+        This draws our messages as a list to allow users to read the messages. The messages have alternating background
+        "row" colors in each message to facilitate reading, and all messages are always contained inside a collapsible
+        imgui structure.
+
+        Args:
+            title (str,optional): Title of this logger to use in this display. If None, defaults to our TAG.
+            use_tree_node (bool, optional): If true, will use `imgui.tree_node()` instead of `imgui.collapsing_header()`
+                when drawing the logger's "root". Defaults to False.
+            use_indent (bool, optional): If true, will add a `imgui.indent()` when drawing the messages. Defaults to False.
+            use_region (bool, optional): If true, will draw all content when opened (the messages) inside a imgui child-region.
+                This allows the messages to have their own "parent size" and scrollbar. See the `region_size` param.
+                Defaults to True.
+            region_size (imgui.ImVec2, optional): Defines the size for the child-region used to draw the messages. Only applicable
+                if `use_region` is True. This is the same `size` as passed to `imgui.begin_child()`. Defaults to None, which means
+                using all available content size.
+        """
+        label = title or str(self._tag)
+        if use_tree_node:
+            if not imgui.tree_node(label):
+                return
+        elif not imgui.collapsing_header(label):
+            return
+
+        if use_region:
+            imgui.begin_child(label, size=region_size)
+
+        width = imgui.get_content_region_avail().x
+        if imgui.begin_table(label, 1, imgui.TableFlags_.row_bg | imgui.TableFlags_.sizing_fixed_fit):
+            imgui.table_setup_column("Logs", init_width_or_weight=width, flags=imgui.TableColumnFlags_.no_resize)
+
+            for msg in self.get_logs():
+                imgui.table_next_row()
+                imgui.table_next_column()
+                if use_indent:
+                    imgui.indent()
+                msg.draw()
+                if use_indent:
+                    imgui.unindent()
+
+            imgui.end_table()
+        if use_region:
+            imgui.end_child()
+        if use_tree_node:
+            imgui.tree_pop()
