@@ -276,12 +276,15 @@ class Vector2Editor(TypeEditor):
     def draw_value_editor(self, value: Vector2):
         if value is None:
             value = Vector2()
+        width = imgui.get_content_region_avail().x - imgui.get_style().item_spacing.x
         imgui.push_id("XComp")
+        imgui.set_next_item_width(width/2)
         x_changed, value.x = self._component_edit(value.x, self.x_range)
         imgui.set_item_tooltip(f"X component of the Vector2.\n\n{self.attr_doc}")
         imgui.pop_id()
         imgui.same_line()
         imgui.push_id("YComp")
+        imgui.set_next_item_width(width/2)
         y_changed, value.y = self._component_edit(value.y, self.y_range)
         imgui.set_item_tooltip(f"Y component of the Vector2.\n\n{self.attr_doc}")
         imgui.pop_id()
