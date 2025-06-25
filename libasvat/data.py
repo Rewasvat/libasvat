@@ -5,6 +5,7 @@ import shutil
 import keyring
 import platform
 import traceback
+import multiprocessing
 from libasvat.command_utils import Singleton
 from typing import Callable
 
@@ -85,6 +86,7 @@ class DataCache(metaclass=Singleton):
         self._base_path: str = None
         self._app_name: str = None
         self._service_id: str = None
+        self._saving_enabled = multiprocessing.current_process().name == "MainProcess"
         self.set_cache_path(os.path.expanduser("~"))
 
     def get_app_name(self):
@@ -107,11 +109,28 @@ class DataCache(metaclass=Singleton):
         if self._app_name is None:
             self._app_name = name
             self._service_id = f"{name.capitalize()}ToolService"
+            click.secho(f"DataCache for {name} initialized. Saving Enabled = {self._saving_enabled}", fg="blue")
 
     def set_cache_path(self, path: str):
         """Sets the folder in which this DataCache instance will save data. This defaults to the user's home folder ('~').
         Files saved have the same name independently of the folder in which they were saved."""
         self._base_path = path
+
+    def set_saving_enabled(self, enabled: bool):
+        """Sets if saving this DataCache to disk is enabled or not. By default this is enabled in the MainProcess,
+        disabled in child/worker processes.
+
+        If set to False, this essentially disables persistence of data since any data set/updated in the cache
+        will not be saved to disk.
+
+        It's desirable to disable saving in child/worker processes and leave saving only to the main process to
+        prevent race-conditions, since each process is a separate python instance, with a different cache object,
+        but all of them would read/save data to the same cache file in the disk.
+
+        Args:
+            enabled (bool): if saving should be enabled or not.
+        """
+        self._saving_enabled = enabled
 
     @property
     def data_path(self):
@@ -169,6 +188,8 @@ class DataCache(metaclass=Singleton):
 
     def save_data(self):
         """Saves this data cache to disk."""
+        if not self._saving_enabled:
+            return
         if self._cache_data is not None:
             safe_pickle_save(self.data_path, self._cache_data)
 
@@ -218,8 +239,9 @@ class DataCache(metaclass=Singleton):
             custom_data_keys.remove(key)
         else:
             self._custom_data[key] = value
-            if safe_pickle_save(self._get_custom_cache_path(key), value):
-                custom_data_keys.add(key)
+            if self._saving_enabled:
+                if safe_pickle_save(self._get_custom_cache_path(key), value):
+                    custom_data_keys.add(key)
         self.set_data("custom_data_keys", custom_data_keys)
 
     def _get_custom_cache_path(self, key: str):
