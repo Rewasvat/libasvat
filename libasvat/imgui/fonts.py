@@ -4,6 +4,7 @@ from libasvat.imgui.math import Vector2
 from libasvat.imgui.general import drop_down
 from libasvat.imgui.colors import Colors
 from libasvat.imgui.editors import TypeDatabase, TypeEditor
+from libasvat.imgui.assets import AssetsManager
 from libasvat.utils import get_all_files
 from contextlib import contextmanager
 from imgui_bundle import imgui
@@ -162,16 +163,10 @@ class FontDatabase(metaclass=cmd_utils.Singleton):
     """
 
     def __init__(self):
-        # NOTE: Workaround to get the assets-path, regardless if we're in standalone-build or not.
-        # But asset_file_fill_path() needs a actual existing file path to work... So we need to use
-        # One we "know" will exist for this to work.
-        assets_path = hello_imgui.asset_file_full_path("app_settings/icon.png", False)
-        assets_path = assets_path.removesuffix("/app_settings/icon.png")
-
-        fonts_folder = os.path.join(assets_path, "fonts")
+        assets = AssetsManager()
         font_paths: list[str] = []
-        for font in get_all_files(fonts_folder, lambda p, name: name.endswith(".ttf")):
-            font = font.removesuffix(".ttf").removeprefix(fonts_folder + os.path.sep)
+        for font in get_all_files(assets.fonts_path, lambda p, name: name.endswith(".ttf")):
+            font = font.removesuffix(".ttf").removeprefix(assets.fonts_path + os.path.sep)
             font = font.replace(os.path.sep, "/")
             font_paths.append(font)
 

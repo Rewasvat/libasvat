@@ -6,7 +6,6 @@ import inspect
 import fnmatch
 import traceback
 import libasvat.utils as utils
-from imgui_bundle import hello_imgui  # type: ignore
 
 _root_commands = []
 
@@ -841,7 +840,7 @@ class RootCommands(metaclass=Singleton):
 
     This singleton does the basic setup for a app's CLI/IMGUI interactions:
     * Sets up `DataCache`'s app-name.
-    * Sets up IMGUI's Assets Folder.
+    * Sets up `AssetsManager`'s assets-path (IMGUI's Assets Folder).
     * Loads all package modules in order to load all `@root_command_group` in the app/package, thus automatically
     populating this CLI command-group with all sub-command-groups of the package dynamically.
     * Automatically calls `DataCache.shutdown()` on finalize, in order to save the cache when exiting the program.
@@ -930,7 +929,8 @@ class RootCommands(metaclass=Singleton):
         """
         self._package_path = utils.get_package_filepath(self.app_name)
         # Setup IMGUI Assets dir
-        hello_imgui.set_assets_folder(self.assets_path)
+        from libasvat.imgui.assets import AssetsManager
+        AssetsManager().assets_path = self.assets_path
         # Setup DataCache
         from libasvat.data import DataCache
         data = DataCache()
