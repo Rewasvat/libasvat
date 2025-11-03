@@ -7,6 +7,7 @@ from libasvat.imgui.general import drop_down
 from libasvat.imgui.editors import TypeDatabase, TypeEditor
 from libasvat.utils import get_all_files
 from imgui_bundle import imgui, hello_imgui  # type: ignore
+from imgui_bundle import portable_file_dialogs as pfd  # type: ignore
 
 
 class AssetPath(str):
@@ -31,6 +32,10 @@ class AssetPathEditor(TypeEditor):
         self.color = Colors.yellow
         self.extra_accepted_input_types = str
         self.convert_value_to_type = True
+        self.allow_external_assets: bool = config.get("allow_external_assets", False)
+        self._showing_internal_assets = True
+        self._initial_internal_check = False
+        self._open_file_dialog: pfd.open_file = None
 
     @property
     def options(self):
@@ -40,14 +45,55 @@ class AssetPathEditor(TypeEditor):
         return self._options
 
     def draw_value_editor(self, value: AssetPath):
-        flags = imgui.SelectableFlags_.no_auto_close_popups
-        return drop_down(value, self.options, default_doc=self.attr_doc, item_flags=flags)
+
+        if self.allow_external_assets:
+            # If enabled, allow selection between internal and external assets.
+            if not self._initial_internal_check:
+                # First time this runs, check if our value is a internal or external asset in order to properly set up initial selection
+                if value is not None and len(value) > 0 and value != "None":
+                    assets = AssetsManager()
+                    self._showing_internal_assets = not assets.is_external_asset_path(value)
+                self._initial_internal_check = True
+
+            if imgui.radio_button("Internal", self._showing_internal_assets):
+                self._showing_internal_assets = True
+            imgui.set_item_tooltip("Select an image from the app's internal assets.")
+            imgui.same_line()
+            if imgui.radio_button("External", not self._showing_internal_assets):
+                self._showing_internal_assets = False
+            imgui.set_item_tooltip("Select an external asset image: can load from anywhere in your computer.")
+            imgui.same_line()
+
+        if self._showing_internal_assets:
+            # Internal assets should be fixed and listed by the AssetsManager, so we can use a drop-down to show options.
+            flags = imgui.SelectableFlags_.no_auto_close_popups
+            # TODO: a tree-like drop-down to organize between the folders would be better.
+            return drop_down(value, self.options, default_doc=self.attr_doc, item_flags=flags)
+        else:
+            # External assets we allow opening a native file-dialog to select the image to load, and display its path.
+            was_changed = False
+            if self._open_file_dialog:
+                imgui.text("Selecting image...")
+                if self._open_file_dialog.ready():
+                    results = self._open_file_dialog.result()
+                    if len(results) > 0:
+                        was_changed = True
+                        value = results[0]
+                    self._open_file_dialog = None
+            else:
+                if imgui.button("Select Image"):
+                    self._open_file_dialog = pfd.open_file("Select an Image", filters=["Image Files", "*.png *.jpg *.jpeg *.bmp"])
+            if value is None or value == "":
+                imgui.text("No image selected...")
+            else:
+                imgui.text(f"Selected image: {value}")
+            return was_changed, value
 
     def _populate_options(self):
         """Populates the available asset paths data stored by this object.
         This data is then used when rendering the editor to properly display the available options."""
         assets = AssetsManager()
-        self._options = assets.all_image_paths
+        self._options = ["None"] + assets.all_image_paths
 
 
 class AssetsManager(metaclass=cmd_utils.Singleton):
