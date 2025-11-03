@@ -12,14 +12,6 @@ from imgui_bundle import imgui, hello_imgui  # type: ignore
 class AssetPath(str):
     """Asset Path object (string).
 
-    A Font ID is used by the ``FontManager`` and related API to identify a TTF Font.
-    Font IDs can come in two forms:
-    * **"Real" Font IDs** are the font IDs loaded from the app's `assets/fonts/` folder. They are the actual
-    relative path to the font's TTF file, and as such, are completely unique to each other since
-    they represent an actual TTF font file.
-    * **Font Aliases** are Font IDs that represent another "real" Font ID. This can be used by the app so
-    it can use friendlier Font IDs than the TTF paths, which might change.
-
     A Asset Path is used by the ``AssetsManager`` and related API to identify an asset of this app.
     They are simple strings, but we use its own class, derived from str, to simplify some features with the editors.
 
@@ -144,7 +136,8 @@ class AssetsManager(metaclass=cmd_utils.Singleton):
             ImageAndSize: a `hello_imgui.ImageAndSize` object with data about the loaded image asset,
             or None if the image couldn't be loaded.
         """
-        if (not os.path.isfile(image_path)) or (self.is_external_asset_path(image_path)):
+        full_path = os.path.abspath(os.path.join(self.assets_path, image_path))
+        if not os.path.isfile(full_path):
             return
         return hello_imgui.image_and_size_from_asset(image_path)
 
@@ -157,13 +150,13 @@ class AssetsManager(metaclass=cmd_utils.Singleton):
         able to use hello-imgui's asset handling features.
 
         Args:
-            image_path (str): path to the image to load. This path must be outside our assets-path.
+            image_path (str): path to the image to load. This path must be a absolute path outside our assets-path.
 
         Returns:
             ImageAndSize: a `hello_imgui.ImageAndSize` object with data about the loaded image asset,
             or None if the image couldn't be loaded.
         """
-        if (not os.path.isfile(image_path)) or (not self.is_external_asset_path(image_path)):
+        if not os.path.isfile(image_path):
             return
         with self.temp_assets(os.path.dirname(image_path)):
             image = self.load_internal_image(os.path.basename(image_path))
@@ -178,10 +171,14 @@ class AssetsManager(metaclass=cmd_utils.Singleton):
         Returns:
             bool: indicates if given path is a external asset path
         """
-        abs_ori = os.path.abspath(self.original_assets_path)
-        original = os.path.commonpath([abs_ori])
-        check = os.path.commonpath([abs_ori, os.path.abspath(path)])
-        return original != check
+        # NOTE: this is kinda sensitive. For now, this appears to be the best solution.
+        #   Checking if path started with our assets-path doesn't work for internal images since they are a relative path (without
+        #   the assets-path prefix).
+        #   Maybe it would be better in the future for asset paths to have a prefix, like "internal:" or "external:" to differentiate between
+        #   internal/external paths. But we would need to fix everywhere that uses these paths to check these prefixes. On the other hand,
+        #   we are already using our 'AssetPath' class, maybe we can add an "is_internal" attribute to it and use that instead?
+        is_internal = path in self._all_images
+        return not is_internal
 
     def img_from_path(self, image_path: AssetPath):
         """Creates a new ImageInfo object based on the given image-path.
@@ -194,10 +191,8 @@ class AssetsManager(metaclass=cmd_utils.Singleton):
         Returns:
             ImageInfo: ImageInfo of the loaded image. Or None if image couldn't be loaded.
         """
-        image_path = image_path.replace("/", os.path.sep)
-        if not os.path.isfile(image_path):
-            return
         is_external = self.is_external_asset_path(image_path)
+        image_path = image_path.replace("/", os.path.sep)
         if is_external:
             data = self.load_external_image(image_path)
         else:
@@ -220,7 +215,7 @@ class AssetsManager(metaclass=cmd_utils.Singleton):
             bool: true if, judging by file extension, the given file-path points to an image.
         """
         ext = os.path.splitext(file_path)[1]
-        return ext.lower() in ("png", "jpg", "jpeg", "bmp", "ico")
+        return ext.lower() in (".png", ".jpg", ".jpeg", ".bmp", ".ico")
 
     def _update_images_list(self):
         """Updates the manager's internal list of all image assets in the app."""
@@ -301,7 +296,7 @@ class ImageInfo:
 
         draw = imgui.get_window_draw_list()
         draw.add_image_rounded(self.texture_id, img_rect.top_left_pos, img_rect.bottom_right_pos, uv_rect.top_left_pos, uv_rect.bottom_right_pos,
-                               color, rounding=self.actual_rounding, flags=self.corners.get_flags())
+                               color, rounding=rounding, flags=flags)
 
     @classmethod
     def from_path(cls, image_path: str):
