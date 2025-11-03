@@ -178,7 +178,8 @@ def imgui_property(**kwargs):
 #   - Ter uma classe com propriedades bem tipadas seria suficiente pra gerar os editors dela. Não precisaria hardcodar imgui_properties e tal
 #     mas ainda poderia ter uma "property" diferente que guarda um **kwargs de metadata de tal property, que seria usado como a config do
 #     modelo de tal atributo
-# TODO: refatorar pra ser fácil poder ter valor None sem quebrar as coisas. O ObjectEditor tem algo assim, isso poderia ser expandido pra todos editores?
+# TODO: refatorar pra ser fácil poder ter valor None sem quebrar as coisas. O ObjectEditor tem algo assim,
+#   isso poderia ser expandido pra todos editores?
 class TypeEditor:
     """Basic class for a value editor in imgui.
 
