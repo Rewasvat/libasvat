@@ -324,7 +324,7 @@ class Rectangle:
         Args:
             aspect_ratio (float): The desired aspect ratio (``width/height``, or see ``Vector2.aspect_ratio()``) of the inner rect.
             margin (float, optional): Optional margin of the returned inner rect to this rect. The margin value is used to space all sides.
-            Defaults to 0.0.
+                Defaults to 0.0.
 
         Returns:
             Rectangle: the largest rectangle with the given aspect-ratio possible inside this one (with the given margin).
@@ -351,7 +351,7 @@ class Rectangle:
                 required to define which corners will be rounded. Defaults to 0.0.
             flags (imgui.ImDrawFlags_, optional): Imgui DrawList Flags to use when drawing the rectangle. Defaults to none (0).
             draw (imgui.ImDrawList, optional): Which Imgui DrawList to use to draw the rectangle. If None, will \
-            default to using ``imgui.get_window_draw_list()``.
+                default to using ``imgui.get_window_draw_list()``.
         """
         if draw is None:
             draw = imgui.get_window_draw_list()
