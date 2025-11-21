@@ -307,7 +307,7 @@ def vector2_property(x_range=(0, 0), y_range=(0, 0), format="%.2f", speed=1.0, f
         x_range (tuple[float, float], optional): (min, max) range of possible values for the X component of the vector.
         y_range (tuple[float, float], optional): (min, max) range of possible values for the Y component of the vector.
         format (str, optional): Text format of the value to decorate the control with. Defaults to "%.3". Apparently this needs to be a valid
-        python format, otherwise the float control wont work properly.
+            python format, otherwise the float control wont work properly.
         speed (float, optional): Speed to apply when changing values. Only applies when dragging the value. Defaults to 1.0.
         flags (imgui.SliderFlags_, optional): Flags for the Slider/Drag float controls. Defaults to imgui.SliderFlags_.none.
     """
