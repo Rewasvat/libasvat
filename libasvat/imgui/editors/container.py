@@ -60,7 +60,6 @@ class ListEditor(ContainerTypeEditor):
         if value is None:
             value = []
         changed = False
-        item_type = self.value_subtypes[0]
         num_items = len(value)
         # Update list if has less than minimun itens.
         if num_items < self.min_items:
@@ -69,7 +68,7 @@ class ListEditor(ContainerTypeEditor):
             num_items = self.min_items
             changed = True
         # Update list if has more than maximum itens.
-        if num_items > self.max_items:
+        if (self.max_items is not None) and (num_items > self.max_items):
             value = value[:self.max_items]
             num_items = self.max_items
             changed = True
