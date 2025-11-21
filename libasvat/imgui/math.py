@@ -134,6 +134,17 @@ class Vector2(ImVec2):
         """Returns a copy of this vector."""
         return self.__class__(self.x, self.y)
 
+    def clamp(self, min_value: float, max_value: float):
+        """Clamps each the value of each component of this Vector2 to
+        the given min/max values.
+
+        Args:
+            min_value (float): minimum value for each component.
+            max_value (float): maximum value for each component.
+        """
+        self.x = min(max_value, max(min_value, self.x))
+        self.y = min(max_value, max(min_value, self.y))
+
     def max(self, *args: 'Vector2'):
         """Get a new Vector2 object where each component is the maximum component
         value amongst ourselves and all given vectors.
@@ -338,6 +349,27 @@ class Rectangle:
             size = Vector2(base_size.y * aspect_ratio, base_size.y)
             pos = base_pos + ((base_size.x - size.x) * 0.5, 0)
         return Rectangle(pos, size)
+
+    def get_inner_point(self, rel_pos: Vector2):
+        """Gets the point inside this rectangle based on the given relative-position vector.
+
+        The returned point is our `top_left` point plus a offset based on the relative-pos vector.
+        The relative-pos vector should have component values in the range [0,1]. Each components dictates the
+        amount (relative to size of this rect) in its axis.
+
+        So a `rel_pos` of (0,0) would return the same `top_left`, while a arg of (1,1) would return the same as
+        `bottom_right`.
+
+        Args:
+            rel_pos (Vector2): relative position vector, in range [0,1], defining offset to the inner point from
+                the top-left position.
+
+        Returns:
+            Vector2: inner point of the rect
+        """
+        rel_pos = rel_pos.copy()
+        rel_pos.clamp(0.0, 1.0)
+        return self.top_left_pos + self.size * rel_pos
 
     def draw(self, color: Color = Colors.white, is_filled=False, thickness=1.0, rounding=0.0, flags: imgui.ImDrawFlags_ = 0,
              draw: imgui.ImDrawList = None):
