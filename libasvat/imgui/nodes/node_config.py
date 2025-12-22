@@ -130,12 +130,16 @@ class NodeConfig:
         node.set_position(self._area.position)
 
         # Setup node's custom data.
-        node.setup_from_config(self._custom_config_data)
+        custom_data = self._custom_config_data.copy()
+        node.setup_from_config(custom_data)
 
         # Set node properties.
         issues = restore_prop_values_to_object(node, self._prop_values)
         for msg in issues:
             click.secho(msg, fg="yellow")
+
+        # Secondary callback to setup node's custom data.
+        node.setup_from_config_post_props(custom_data)
 
         # Recreate links
         for link_info in self._links_info:

@@ -351,14 +351,14 @@ class Node:
 
         Args:
             callback (Callable[[Node, int], bool]): The callable to be executed for each node we pass by. The callback will receive the node
-            instance itself, and the current level. The current level increases by 1 each time we go from one node to the next.
+                instance itself, and the current level. The current level increases by 1 each time we go from one node to the next.
             allowed_outputs (list[type[NodePin]]): List or tuple of NodePin classes for output pins. Pins that are of these classes will be used to
-            walk through to the next nodes in the graph via their links.
+                walk through to the next nodes in the graph via their links.
             starting_level (int, optional): The current level for this ``walk_in_graph`` execution. The ``callback`` will be called with this level.
-            This increments internally as the graph is walked through. User may pass this when initially calling this method in the starting node,
-            altho its recommended not to. Defaults to 0.
+                This increments internally as the graph is walked through. User may pass this when initially calling this method in the starting node,
+                altho its recommended not to. Defaults to 0.
             walked_nodes (set[Node], optional): Set of nodes this walk has already passed through. The walk ignores nodes that are in this set.
-            This is used internally to control which nodes we already walked through. Defaults to None.
+                This is used internally to control which nodes we already walked through. Defaults to None.
         """
         if walked_nodes is None:
             walked_nodes = set()
@@ -451,9 +451,24 @@ class Node:
 
         Args:
             data (dict[str, any]): dict of custom data of this Node to recreate it. Acquired via
-            ``self.get_custom_config_data()`` when the NodeConfig building this node was created.
+                ``self.get_custom_config_data()`` when the NodeConfig building this node was created.
         """
         pass
+
+    def setup_from_config_post_props(self, data: dict[str, any]):
+        """Secondary callback to perform custom setup of this Node object, when being recreated by a `NodeConfig`.
+
+        The NodeConfig calls this after setting the node's property values, but before setting up links to other
+        nodes. The `self.setup_from_config(data)` (with this same data dict) was already called, before setting
+        up the property values.
+
+        As such, Nodes can use this to setup any other of their data that isn't a Imgui (or Data) Property or link,
+        but needs to be set up after all other properties of the node are set.
+
+        Args:
+            data (dict[str, any]): dict of custom data of this Node to recreate it. Acquired via
+                ``self.get_custom_config_data()`` when the NodeConfig building this node was created.
+        """
 
     def get_custom_config_data(self):
         """Gets a dict of custom config data of this Node, to store along with its `NodeConfig`.
