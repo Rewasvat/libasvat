@@ -186,6 +186,7 @@ class ColorsClass:
         if size <= 0:
             return summed
         summed /= size
+        summed = Color(summed.x, summed.y, summed.z, summed.w)
         summed.clamp()
         return summed
 
