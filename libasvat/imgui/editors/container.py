@@ -1,5 +1,5 @@
 from libasvat.imgui.colors import Colors
-from libasvat.imgui.general import adv_button
+from libasvat.imgui.general import adv_button, drop_down
 from libasvat.imgui.editors.database import TypeDatabase
 from libasvat.imgui.editors.editor import TypeEditor, imgui_property
 from libasvat.imgui.editors.controller import get_all_renderable_properties
@@ -55,6 +55,10 @@ class ListEditor(ContainerTypeEditor):
         """TypeEditor for the items in the list. This is used to edit each item in the list."""
         self.has_container_items: bool = issubclass(type(self.item_editors[0]), ContainerTypeEditor)
         """Indicates if our Item Type is a container type (a type that has multiple values). This affects how we draw each item in the editor."""
+        self.use_item_subclasses: bool = config.get("use_item_subclasses", False)
+        """Indicates if we should use subclasses of our item-type instead of using the item-type itself."""
+        self.selected_subtype: type = None
+        """The subclass of our item-type the user selected to use in the editor. If None, will default to the first subclass."""
 
     def draw_value_editor(self, value: list):
         if value is None:
@@ -117,6 +121,9 @@ class ListEditor(ContainerTypeEditor):
                 if self.has_container_items and can_show:
                     imgui.tree_pop()
         # Handle button to add more itens.
+        if self.use_item_subclasses:
+            self._draw_subtype_selector()
+            imgui.same_line()
         can_add = (self.max_items is None) or (len(value) < self.max_items)
         add_help = "Adds a new default item to the list. The item can then be edited."
         if adv_button("Add Item", tooltip=add_help, is_enabled=can_add):
@@ -145,6 +152,10 @@ class ListEditor(ContainerTypeEditor):
                 return method(self)
 
         item_type = self.value_subtypes[0]
+        if self.use_item_subclasses:
+            if self.selected_subtype is None:
+                self.selected_subtype = item_type.__subclasses__()[0]
+            return self.selected_subtype()
         return item_type()
 
     def get_item_editor(self, index: int) -> TypeEditor:
@@ -177,8 +188,23 @@ class ListEditor(ContainerTypeEditor):
         self.item_editors[i] = editor_j
         self.item_editors[j] = editor_i
 
+    def _draw_subtype_selector(self):
+        """Draws the imgui control to allow the user to select the item-type's subclass this editor will
+        use to instantiate a new item."""
+        # TODO: Talvez refatorar essa lógica pra algum outro lugar pra ser fácil de reutilizar em outros lugares.
+        imgui.push_id("SubtypeSelector")
+        item_type = self.value_subtypes[0]
+        subtypes = {subtype.__name__: subtype for subtype in item_type.__subclasses__()}
+        docs = [subtype.__doc__ for subtype in subtypes.values()]
+        subnames = list(subtypes.keys())
+        selected_name = self.selected_subtype.__name__ if self.selected_subtype is not None else subnames[0]
+        changed_subtype, selected_name = drop_down(selected_name, subnames, docs=docs)
+        if changed_subtype:
+            self.selected_subtype = subtypes[selected_name]
+        imgui.pop_id()
 
-def list_property(min_items: int = 0, max_items: int = None, item_config: dict[str, any] = None):
+
+def list_property(min_items: int = 0, max_items: int = None, item_config: dict[str, any] = None, use_item_subclasses: bool = False):
     """Imgui Property attribute for a LIST type.
 
     Behaves the same way as a property, but includes a ListEditor object for allowing changing this list's items in imgui.
@@ -189,8 +215,10 @@ def list_property(min_items: int = 0, max_items: int = None, item_config: dict[s
         max_items (int, optional): maximum number of items in the list. If the list has more than this, it will be automatically
             trimmed to this size. If None (the default), there is no maximum.
         item_config (dict[str, any], optional): Configuration for the item's TypeEditor. This is passed to the TypeEditor constructor.
+        use_item_subclasses (bool): If true, will allow user to select which item subclass to instantiate when adding an item to the list.
+            In this case, the list will never instantiate its item-type - it'll always instantiate a subtype of the item-type.
     """
-    return imgui_property(min_items=min_items, max_items=max_items, item_config=item_config)
+    return imgui_property(min_items=min_items, max_items=max_items, item_config=item_config, use_item_subclasses=use_item_subclasses)
 
 
 class ObjectEditor(ContainerTypeEditor):
