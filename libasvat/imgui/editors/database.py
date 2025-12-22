@@ -60,6 +60,7 @@ class TypeDatabase(metaclass=cmd_utils.Singleton):
             is_creatable (bool, optional): If this type, with the given editor class, will be creatable via editor. Defaults to True.
         """
         self._types[cls] = editor_class
+        # TODO: podia usar o @not_user_creatable pra pegar essa flag is_creatable automaticamente
         self._creatable_types[cls] = is_creatable
 
     def get_creatable_types(self):
@@ -70,6 +71,7 @@ class TypeDatabase(metaclass=cmd_utils.Singleton):
         Returns:
             list[type]: list of types with proper registered editors.
         """
+        # TODO: isso devia tb puxar as subclasses dos creatable_types, já que eles funcionam tb
         return [cls for cls, is_creatable in self._creatable_types.items() if is_creatable]
 
     @classmethod

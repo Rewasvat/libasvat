@@ -123,7 +123,7 @@ class ImguiProperty(AdvProperty):
 
         Args:
             obj (any): The object that owns this property. A property is created as part of a class, thus this object
-            is a instance of that class.
+                is a instance of that class.
 
         Returns:
             TypeEditor: The TypeEditor instance for editing this property, in this object. None if the editor instance doesn't
