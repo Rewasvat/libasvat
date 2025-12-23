@@ -1,4 +1,5 @@
 import os
+import time
 import json
 import click
 from enum import Enum
@@ -230,6 +231,14 @@ class AppWindow(BasicWindow):
         opened once before.
         """
         self._is_running: bool = False
+        self._frame_start_mark = 0
+        self.window_fps_cap = 60
+        """The FPS at which the window will cap at when not-idling, either because of user interaction of idling being disabled.
+
+        When not-idling, the window will run at the maximum FPS the system performance allows or cap naturally at the monitor's refresh rate.
+        If this attribute is set to a positive value, the window will cap at this maximum non-idle FPS. If the value is 0 or less, there'll
+        be no FPS cap. This defaults to 60.
+        """
 
     @property
     def is_running(self) -> bool:
@@ -243,7 +252,7 @@ class AppWindow(BasicWindow):
     def idle_fps(self) -> float:
         """The FPS at which the window will run when idling (see ``self.enable_fps_idling``)
 
-        Note that this is just the "target" FPS cap. The actual FPS when idling may be lower depending on the system performance.
+        Note that this is just the "target idling" FPS cap. The actual FPS when idling may be lower depending on the system performance.
         """
         return self._idle_fps
 
@@ -288,6 +297,7 @@ class AppWindow(BasicWindow):
         run_params.callbacks.before_exit = self.on_before_exit
         run_params.callbacks.post_init = self.on_init
         run_params.callbacks.pre_new_frame = self.on_pre_new_frame
+        run_params.callbacks.after_swap = self.on_after_frame
 
         # First, tell HelloImGui that we want full screen dock space (this will create "MainDockSpace")
         if self.mode == RunnableAppMode.DOCK:
@@ -406,6 +416,21 @@ class AppWindow(BasicWindow):
             for child in self.children:
                 if not child.is_visible:
                     self.remove_child_window(child)
+        self._frame_start_mark = time.perf_counter()
+
+    def on_after_frame(self):
+        """Callback called each frame, after IMGUI has been rendered and swapped to the screen.
+
+        That is, this runs after ``imgui.end_frame()`` and the renderer's swap, which in turn is after our ``render()``.
+        """
+        if self.window_fps_cap > 0:
+            # Sleep thread the amount of time needed so that our frame-time reaches our target FPS cap.
+            frame_duration = 1.0 / self.window_fps_cap
+            end_mark = time.perf_counter()
+            elapsed = end_mark - self._frame_start_mark
+            sleep_time = frame_duration - elapsed
+            if sleep_time > 0:
+                time.sleep(sleep_time)
 
     def add_child_window(self, child: BasicWindow):
         """Adds a new child window to this AppWindow.
