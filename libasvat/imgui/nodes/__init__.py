@@ -5,4 +5,4 @@
 from libasvat.imgui.nodes.nodes import Node, NodePin, NodeLink, PinKind
 from libasvat.imgui.nodes.editor import NodeSystem
 from libasvat.imgui.nodes.nodes_data import DataPin, DataPinState
-from libasvat.imgui.nodes.nodes_data import input_property, output_property, NodeDataProperty, create_data_pins_from_properties
+from libasvat.imgui.nodes.nodes_data import input_property, output_property, NodeDataProperty, create_data_pins_from_properties, SelectableTypeMixin
