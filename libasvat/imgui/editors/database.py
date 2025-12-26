@@ -40,10 +40,13 @@ class TypeDatabase(metaclass=cmd_utils.Singleton):
             editor_cls = UnionEditor
             actual_type = value_type  # UnionEditor needs original_type==value_type, being the union itself.
         else:
-            for cls in actual_type.mro():
-                if cls in self._types:
-                    editor_cls = self._types[cls]
-                    break
+            try:
+                for cls in actual_type.mro():
+                    if cls in self._types:
+                        editor_cls = self._types[cls]
+                        break
+            except TypeError:
+                editor_cls = self._types.get(actual_type, None)
         if editor_cls:
             config = config or {}
             config["original_type"] = value_type

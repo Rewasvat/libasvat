@@ -312,3 +312,39 @@ def vector2_property(x_range=(0, 0), y_range=(0, 0), format="%.2f", speed=1.0, f
         flags (imgui.SliderFlags_, optional): Flags for the Slider/Drag float controls. Defaults to imgui.SliderFlags_.none.
     """
     return imgui_property(x_range=x_range, y_range=y_range, format=format, speed=speed, flags=flags)
+
+
+@TypeDatabase.register_editor_for_type(type, False)
+class TypeSelector(TypeEditor):
+    """Imgui TypeEditor for editing a TYPE value."""
+
+    def __init__(self, config: dict):
+        super().__init__(config)
+        self.add_tooltip_after_value = False
+        self.color = Colors.white
+        self.flags: imgui.SelectableFlags_ = config.get("flags", 0)
+
+    def draw_value_editor(self, value: type) -> tuple[bool, type]:
+        type_db = TypeDatabase()
+        available_types = type_db.get_creatable_types()
+        names = {cls.__name__: cls for cls in available_types}
+        names_array = list(names.keys())
+        docs = [cls.__doc__ for cls in available_types]
+
+        selected_name = value.__name__ if value is not None else names_array[0]
+        changed, new_name = drop_down(selected_name, names_array, docs=docs, default_doc=self.attr_doc, item_flags=self.flags)
+        if changed and new_name in names:
+            value = names.get(new_name)
+        return changed, value
+
+
+def type_selector(flags: imgui.SelectableFlags_ = 0):
+    """Imgui Property attribute for a TYPE type.
+
+    Behaves the same way as a property, but includes a TypeSelector object for allowing changing this type's value in imgui.
+    Essentially allows a user, via the IMGUI editor, to select a TYPE (not a instance of a type) to set as the value of this property.
+
+    Args:
+        flags (imgui.SelectableFlags_, optional): Flags passed down to the drop-down selectable.
+    """
+    return imgui_property(flags=flags)

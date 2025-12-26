@@ -58,6 +58,17 @@ class ImguiProperty(AdvProperty):
         """
         return self.set_prop_value(obj, value)
 
+    def has_type_annotation(self):
+        """Checks if this property has a annotated type.
+
+        Since usually the property's current value type is used directly if there is no annotated type,
+        this can be used by logic that needs to differentiated between the fixed annotated type or the
+        possibly mutable current type.
+        """
+        sig = inspect.signature(self.fget)
+        cls = sig.return_annotation
+        return cls != sig.empty
+
     def get_value_type(self, obj=None):
         """Gets the type of this property (the type of its value).
 
