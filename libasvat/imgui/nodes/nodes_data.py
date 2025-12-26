@@ -1,4 +1,5 @@
 import types
+import libasvat.imgui.editors.primitives as primitives
 from imgui_bundle import imgui
 from libasvat.utils import get_all_properties, adv_property
 from libasvat.imgui.nodes import Node, NodePin, NodeLink, PinKind
@@ -131,7 +132,7 @@ class DataPin(NodePin):
 
         This sets a fixed tooltip text, but gets a formatted string, containing the fixed text and the pin's value for display.
         """
-        return f"{self._pin_tooltip}\n\nLocal Value: {self.state.get()}\nActual Value: {self.get_value()}"
+        return f"{self._pin_tooltip}\n\nType: {self.state.type()}\nLocal Value: {self.state.get()}\nActual Value: {self.get_value()}"
 
     @pin_tooltip.setter
     def pin_tooltip(self, value: str):
@@ -244,6 +245,27 @@ class DataPin(NodePin):
             for pin, other_link in list(self._links.items()):
                 if other_link != link:
                     other_link.delete()
+
+    def set_type(self, cls: type):
+        """Manually sets the value type of this DataPin to the given type.
+
+        This will set the type, update the pin's editor and color, and validate all links - which might potentially
+        delete existing links if they are invalid for the new type.
+
+        Note however that actually respecting this manually defined type for the pin depends on the ``DataPinState``
+        being used by the pin. Particularly the base ``DataPinState`` class will respect it fully, while the
+        ``DataPropertyState`` subclass, which links the state to a NodeDataProperty on a node, will only respect that
+        if the property has no annotated type.
+
+        Args:
+            cls (type): value type to set for this DataPin.
+        """
+        self.state.value_type = cls
+        self.state.setup_editor()
+        self.state.set(cls())
+        if self.state.editor:
+            self.default_link_color = self.state.editor.color
+        self.validate_all_links()
 
     def __str__(self):
         return f"{self.pin_kind.name.capitalize()} Data {self.pin_name}"
@@ -438,6 +460,10 @@ class DataPropertyState(DataPinState):
         self.property.set_prop_value(self.parent_node, value)
 
     def type(self):
+        if not self.property.has_type_annotation():
+            cls = super().type()
+            if cls is not None:
+                return cls
         return self.property.get_value_type(self.parent_node)
 
     def subtypes(self):
@@ -606,3 +632,72 @@ class DynamicInputSubPinState(DataPinState):
         """Updates the name of this state (and its pin) according to our current index."""
         self.name = f"{self.owner.name} #{self.index + 1}"
         self.parent_pin.pin_name = self.name
+
+
+class SelectableTypeMixin:
+    """Mixin for Node classes that adds support for a user-selectable type to be used
+    as the type for some DataPins.
+
+    This adds a imgui-property ``value_type``, that when updated by the user in the Node's editor, will update
+    all generic property-based DataPins of this Node to use the newly set type.
+
+    Property-based DataPins refers to DataPins created via NodeDataProperties, such as those used by the
+    commonly used ``@input_property()`` and ``@output_property`` decorators. While the "generic" means
+    these properties have no annotated type (from the property getter's return type-hint).
+
+    Thus this essentially adds a behavior similar to C++'s templates to the Node, with the user being able to change
+    the type of several properties in runtime at the editor.
+
+    Usage:
+    ```python
+    # Just use multiple inheritance to inherit from this and from a Node class, and call the base constructor.
+    class MyNodeClass(SelectableTypeMixin, Node):
+        def __init__(self, ...):
+            ...
+            super().__init__(...)
+            ...
+
+        @input_property()
+        def myvalue(self):
+            # Note there are no return type-hints!
+            # This property will use the user-selected type.
+            pass
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._value_type: type = None
+        self.value_type = str
+
+    @primitives.type_selector()
+    def value_type(self) -> type:
+        """The type of data the "generic" property-based DataPins of this node will accept/use. [GET/SET]
+
+        Property-based DataPins refers to DataPins created via NodeDataProperties, such as those used by the
+        commonly used ``@input_property()`` and ``@output_property`` decorators. While the "generic" means
+        these properties have no annotated type (from the property getter's return type-hint).
+
+        If this value-type is changed, all pins in this node that match these conditions will have their types
+        changed. Thus each pin will:
+        * have its value reset to the new type's default value.
+        * have its color updated to the new type's color.
+        * delete any existing links that are invalid/mismatched with the new type.
+        """
+        return self._value_type
+
+    @value_type.setter
+    def value_type(self: Node, value: type):
+        self._value_type = value
+
+        props: dict[str, NodeDataProperty] = get_all_properties(type(self), NodeDataProperty)
+        for prop in props.values():
+            if prop.has_type_annotation():
+                continue
+            pin = prop.get_pin(self)
+            if pin:
+                pin.set_type(value)
+
+    def render_edit_details(self):
+        type(self).value_type.render_editor(self)
+        imgui.separator()
+        super().render_edit_details()

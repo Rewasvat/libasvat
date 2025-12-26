@@ -798,6 +798,23 @@ class NodePin:
         self.delete_all_links()
         nodes_id_generator().recycle(self.pin_id.id())
 
+    def validate_all_links(self):
+        """Validates all existing links of this pin, deleting each one that is no longer valid (when the link can no longer be made).
+
+        This should be used by any pins whose linking conditions (``can_link_to()`` implementation) may change for any reason, in order
+        to check if any links can no longer exist and thus delete them.
+
+        Returns:
+            int: number of invalid links that were deleted.
+        """
+        count = 0
+        with self.parent_node._block_state():
+            for other in list(self._links.keys()):
+                if not self.is_link_possible(other) or not other.is_link_possible(self):
+                    self.delete_link_to(other)
+                    count += 1
+        return count
+
 
 class NodeLink:
     """The connection between an input and output pins on two different nodes.
