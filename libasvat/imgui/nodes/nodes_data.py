@@ -649,11 +649,11 @@ class SelectableTypeMixin:
     as the type for some DataPins.
 
     This adds a imgui-property ``value_type``, that when updated by the user in the Node's editor, will update
-    all generic property-based DataPins of this Node to use the newly set type.
+    all generic DataPins of this Node to use the newly set type.
 
-    Property-based DataPins refers to DataPins created via NodeDataProperties, such as those used by the
-    commonly used ``@input_property()`` and ``@output_property`` decorators. While the "generic" means
-    these properties have no annotated type (from the property getter's return type-hint).
+    All DataPins of this Node are affected by this. However, the only exception is any property-based DataPin,
+    such as those created by the commonly used ``@input_property()`` or ``@output_property`` decorators,
+    that have annotated type (the return type-hint in the property's getter method).
 
     Thus this essentially adds a behavior similar to C++'s templates to the Node, with the user being able to change
     the type of several properties in runtime at the editor.
@@ -681,11 +681,11 @@ class SelectableTypeMixin:
 
     @primitives.type_selector()
     def value_type(self) -> type:
-        """The type of data the "generic" property-based DataPins of this node will accept/use. [GET/SET]
+        """The type of data the "generic" DataPins of this node will accept/use. [GET/SET]
 
-        Property-based DataPins refers to DataPins created via NodeDataProperties, such as those used by the
-        commonly used ``@input_property()`` and ``@output_property`` decorators. While the "generic" means
-        these properties have no annotated type (from the property getter's return type-hint).
+        All DataPins of this Node are affected by this. However, the only exception is any property-based DataPin,
+        such as those created by the commonly used ``@input_property()`` or ``@output_property`` decorators,
+        that have annotated type (the return type-hint in the property's getter method).
 
         If this value-type is changed, all pins in this node that match these conditions will have their types
         changed. Thus each pin will:
@@ -699,13 +699,13 @@ class SelectableTypeMixin:
     def value_type(self: Node, value: type):
         self._value_type = value
 
-        props: dict[str, NodeDataProperty] = get_all_properties(type(self), NodeDataProperty)
-        for prop in props.values():
-            if prop.has_type_annotation():
-                continue
-            pin = prop.get_pin(self)
-            if pin:
-                pin.set_type(value)
+        pins: list[DataPin] = [pin for pin in self.all_pins if issubclass(type(pin), DataPin)]
+        for pin in pins:
+            if issubclass(type(pin.state), DataPropertyState):
+                state: DataPropertyState = pin.state
+                if state.property.has_type_annotation():
+                    continue
+            pin.set_type(value)
 
     def render_edit_details(self):
         type(self).value_type.render_editor(self)
