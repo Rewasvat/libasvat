@@ -96,6 +96,18 @@ class DataPinState:
         else:
             self.editor = TypeDatabase().get_editor(self.type(), config)
 
+    def set_type(self, cls: type):
+        """Manually sets the value-type of this DataPinState to the given type.
+
+        This will set the type, update our editor, and reset our value.
+
+        Args:
+            cls (type): value type to set for this DataPin.
+        """
+        self.value_type = cls
+        self.setup_editor()
+        self.set(cls())
+
     def on_delete(self):
         """Deletes this pin state. Called when the parent pin is deleted."""
         pass
@@ -260,9 +272,7 @@ class DataPin(NodePin):
         Args:
             cls (type): value type to set for this DataPin.
         """
-        self.state.value_type = cls
-        self.state.setup_editor()
-        self.state.set(cls())
+        self.state.set_type(cls)
         if self.state.editor:
             self.default_link_color = self.state.editor.color
         self.validate_all_links()
