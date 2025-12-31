@@ -37,7 +37,7 @@ class FontIDEditor(TypeEditor):
         self.convert_value_to_type = True
 
     @property
-    def sensor_options(self):
+    def font_options(self):
         """Gets the font options available for selection."""
         if len(self._options) == 0:
             self._populate_options()
@@ -45,7 +45,7 @@ class FontIDEditor(TypeEditor):
 
     def draw_value_editor(self, value: FontID):
         flags = imgui.SelectableFlags_.no_auto_close_popups
-        return drop_down(value, self.sensor_options, default_doc=self.attr_doc, item_flags=flags)
+        return drop_down(value, self.font_options, default_doc=self.attr_doc, item_flags=flags)
 
     def _populate_options(self):
         """Populates the available font IDs data stored by this object.
