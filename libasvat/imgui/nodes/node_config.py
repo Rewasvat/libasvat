@@ -1,3 +1,4 @@
+import copy
 import click
 from libasvat.imgui.nodes import Node, PinKind, NodeLink, NodeSystem
 from libasvat.imgui.math import Rectangle
@@ -130,11 +131,11 @@ class NodeConfig:
         node.set_position(self._area.position)
 
         # Setup node's custom data.
-        custom_data = self._custom_config_data.copy()
+        custom_data = copy.deepcopy(self._custom_config_data)
         node.setup_from_config(custom_data)
 
         # Set node properties.
-        issues = restore_prop_values_to_object(node, self._prop_values)
+        issues = restore_prop_values_to_object(node, copy.deepcopy(self._prop_values))
         for msg in issues:
             click.secho(msg, fg="yellow")
 
