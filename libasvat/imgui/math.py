@@ -209,8 +209,12 @@ class Vector2(ImVec2):
         """
         return {"x": self.x, "y": self.y}
 
-    def aspect_ratio(self):
-        """Returns the aspect-ratio of this vector: ``X / Y``"""
+    def aspect_ratio(self) -> float:
+        """Returns the aspect-ratio of this vector: ``X / Y``.
+        If our Y component is 0, this will return 0 as well to prevent a DivisionByZero error.
+        """
+        if self.y == 0:
+            return 0
         return self.x / self.y
 
     def is_zero(self):
