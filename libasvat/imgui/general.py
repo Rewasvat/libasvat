@@ -264,7 +264,7 @@ def object_creation_menu(cls: type, name_getter: Callable[[type], str] = None, f
     if show_cls:
         if imgui.menu_item_simple(name):
             obj = cls()
-        imgui.set_item_tooltip("Creates a object of this class.\n" + cls.__doc__)
+        imgui.set_item_tooltip("Creates an object of this class.\n" + cls.__doc__)
 
     subs = cls.__subclasses__()
     if len(subs) > 0 and show_subs:

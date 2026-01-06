@@ -338,7 +338,7 @@ class ObjectEditor(ContainerTypeEditor):
 
 
 def obj_property(use_bullet_points: bool = False, ignored_properties: list[str] = None, is_nullable: bool = False):
-    """Imgui Property attribute for a custom-object type. These can be any types that are configured to being edited by a ObjectEditor.
+    """Imgui Property attribute for a custom-object type. These can be any types that are configured to being edited by an ObjectEditor.
 
     Behaves the same way as a @property, but includes a ListEditor object for allowing changing this list's items in imgui.
 

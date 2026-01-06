@@ -52,7 +52,7 @@ def get_all_config_properties(obj_class: type):
     These properties are `ImguiProperties` (and subclasses), which define values from the object that the user can edit
     in imgui, thus configuring the object to his liking.
 
-    So when recreating a object from the same class, if all configurable property values are the same, the object should behave
+    So when recreating an object from the same class, if all configurable property values are the same, the object should behave
     the same as a similar instance.
 
     This is the same as ``get_all_renderable_properties()`` but filters out properties that are not configurable.
@@ -122,7 +122,7 @@ class EditorController:
 
     TypeEditors are usually directed into editing a value as a property of another object. This utility class allows to
     easily use it to directly edit a value. So this EditorController is usually used as the starting point in a GUI to edit
-    a object.
+    an object.
 
     As such, this class allows one to indicate the user will start to edit the object, and then accept or cancel the edit.
     When cancelling, the object's property values are restored to their original values (when ``start_edit()`` was called).

@@ -477,7 +477,7 @@ class Node:
         configuration data. That is, any data required to recreate this node that ISN'T: a (imgui/data) property
         value, or a link to other nodes.
 
-        Data stored in the dict returned by this method MUST BE PICKABLE! And preferably not being a object instance
+        Data stored in the dict returned by this method MUST BE PICKABLE! And preferably not being an object instance
         that might cause issues when loading (if the object class is changed), or cause other code to be executed.
 
         When recreating a Node with its NodeConfig, this custom data will be passed to ``self.setup_from_config()``
