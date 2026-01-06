@@ -33,7 +33,7 @@ class ContainerTypeEditor(TypeEditor):
             imgui.tree_pop()
 
 
-@TypeDatabase.register_editor_for_type(list)
+@TypeDatabase.register_editor_for_type(list, False)
 class ListEditor(ContainerTypeEditor):
     """Imgui TypeEditor for editing a LIST value."""
 
