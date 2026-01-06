@@ -309,7 +309,7 @@ def expand_batch_commands(f):
 
     Instead of using the base behavior of `fnmatch.filter` to expand a sub-group-name into
     multiple sub-names (thus batching), this marked method will be called instead to do this
-    subname => list of subnames processing. Therefore a object can implement its own logic on
+    subname => list of subnames processing. Therefore an object can implement its own logic on
     how to expand names for batching sub-commands.
 
     The method is expected to receive the following arguments, in this order:

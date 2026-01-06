@@ -205,9 +205,9 @@ class TypeEditor:
 
     The ``@imgui_property(metadata)`` decorator can be used instead of ``@property`` to mark a class' property as being an
     "Imgui Property". They have an associated TypeEditor based on the property's type, with metadata for the editor
-    passed in the decorator. When rendering, a object of the class may update its editor by having specific methods
+    passed in the decorator. When rendering, an object of the class may update its editor by having specific methods
     (see ``update_from_obj``). The ``render_all_properties()`` function can then be used to render all available
-    ImguiProperties in a object.
+    ImguiProperties in an object.
 
     Other ``@<type>_property(**args)`` decorators exist to help setting up a imgui-property by having documentation for
     the metadata of that type.

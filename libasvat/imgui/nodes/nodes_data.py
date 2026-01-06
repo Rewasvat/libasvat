@@ -437,7 +437,7 @@ def create_data_pins_from_properties(node: Node):
 
 class DataPropertyState(DataPinState):
     """Specialized DataPin State that associates the pin's state with that of a NodeDataProperty
-    from a object.
+    from an object.
 
     The pin's name, kind, type and value will match that of the property in the node.
     """

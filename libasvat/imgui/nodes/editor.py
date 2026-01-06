@@ -465,7 +465,7 @@ class NodeSystem:
         If the user selects a node to create, this returns the new Node's instance.
 
         The default implementation of this in NodeSystem uses ``libasvat.imgui.general.object_creation_menu(Node)`` to
-        draw a object creation menu based on all subclasses of the base Node, using our ``self.node_creation_menu_filter``
+        draw an object creation menu based on all subclasses of the base Node, using our ``self.node_creation_menu_filter``
         as filter. Subclasses can overwrite this to implement their own "new node" logic!
 
         Args:

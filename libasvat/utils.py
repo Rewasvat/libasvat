@@ -437,7 +437,7 @@ class EventDispatcher[T: callable]:
 
 
 def initialize_object(obj: object, state: dict[str]):
-    """Initializes a object being deserialized.
+    """Initializes an object being deserialized.
 
     This updates the object by calling its ``__init__()`` method (without args), and then
     updating its ``__dict__`` with a subset of all items in the given ``state``.
@@ -445,7 +445,7 @@ def initialize_object(obj: object, state: dict[str]):
     only existing attributes in object are update with their values from state,
     other values from state are ignored.
 
-    Thus, a object's ``__setstate__()`` method can use this to initialize the deserialized (unpickling)
+    Thus, an object's ``__setstate__()`` method can use this to initialize the deserialized (unpickling)
     instance.
 
     The object's ``__init__()`` method should setup the instance's default attributes and other initialization
