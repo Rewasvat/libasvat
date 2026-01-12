@@ -26,7 +26,7 @@ setuptools.setup(
     install_requires=[
         "Click>=8.1.0", "Colorama",  # Click (command-line/print) related stuff
         "keyring",  # System service for storing private data
-        "imgui-bundle==1.6.2",  # GUI: Fixed version since it has regular updates, and some with breaking changes.
+        "imgui-bundle[all-backends]==1.92.5",  # GUI: Fixed version since it has regular updates, and some with breaking changes.
         "debugpy",  # Enables python debugger
         "google-api-python-client", "google-auth-oauthlib",  # Libs for Google Sheet and related auth
     ]
