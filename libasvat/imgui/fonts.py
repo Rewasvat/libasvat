@@ -151,6 +151,8 @@ class FontCache:
 
 # TODO: o cache só funciona pra 1 AppWindow (um imgui context) aberto ao mesmo tempo.
 #   a font é ligada ao contexto OpenGL, q é ligado ao AppWindow.
+# TODO: refactor FontDB and FontCaches: with font-related changes in imgui 1.92, we don't need
+#   to keep loading fonts in different sizes, so we can simplify the code of these classes.
 class FontDatabase(metaclass=cmd_utils.Singleton):
     """Singleton database of fonts to use with IMGUI.
 
@@ -207,7 +209,7 @@ class FontDatabase(metaclass=cmd_utils.Singleton):
             cache.load_fonts()
 
     @contextmanager
-    def using_font(self, size: int = 16, font: FontID = None) -> Generator[imgui.ImFont, None, None]:
+    def using_font(self, size: int = 16, font: FontID = None) -> Generator[imgui.ImFontBaked, None, None]:
         """Context manager to use a specific sized font with IMGUI.
 
         The request font will be pushed to imgui's stack (``push_font``), then this method will
@@ -222,11 +224,11 @@ class FontDatabase(metaclass=cmd_utils.Singleton):
             font (FontID, optional): Which font to get, amongst the available ones. Defaults to our ``self.default_font``.
 
         Yields:
-            ImFont: the font object that was requested and used.
+            ImFontBaked: the baked-font object currently in use by imgui.
         """
-        imfont, is_loaded = self.get_font(size, font)
-        imgui.push_font(imfont)
-        yield imfont
+        imfont, is_loaded = self.get_font(20, font)
+        imgui.push_font(imfont, size)
+        yield imgui.get_font_baked()
         imgui.pop_font()
 
     def set_font_alias(self, font: FontID, alias: str):
@@ -319,9 +321,11 @@ class FontDatabase(metaclass=cmd_utils.Singleton):
         else:
             cache = self.get_cache(font)
 
+        # TODO: fix this: due to using this, this method should only work with the current font (so the args can be kind pointless)
+        fontbaked = imgui.get_font_baked()
         if not cache:
             return Vector2()
-        return Vector2(0, abs(imfont.descent) * cache.pos_fix_multiplier)
+        return Vector2(0, abs(fontbaked.descent) * cache.pos_fix_multiplier)
 
     def get_text_size_fix(self, imfont: imgui.ImFont = None, font: FontID = None):
         """Gets the text size fix for the given ImFont.
@@ -350,9 +354,11 @@ class FontDatabase(metaclass=cmd_utils.Singleton):
         else:
             cache = self.get_cache(font)
 
+        # TODO: fix this: due to using this, this method should only work with the current font (so the args can be kind pointless)
+        fontbaked = imgui.get_font_baked()
         if not cache:
             return Vector2()
-        return Vector2(0, abs(imfont.descent) * cache.size_fix_multiplier)
+        return Vector2(0, abs(fontbaked.descent) * cache.size_fix_multiplier)
 
     def clear(self):
         """Clear all FontCaches, releasing all stored resources."""
