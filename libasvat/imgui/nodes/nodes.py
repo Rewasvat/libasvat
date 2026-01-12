@@ -130,14 +130,11 @@ class Node:
             size = Vector2(self.node_area.size.x - border_size, self._node_header_height) - border_size
             draw = imgui.get_window_draw_list()
             draw.add_rect_filled(pos, pos+size, self.node_header_color.u32, rounding, imgui.ImDrawFlags_.round_corners_top)
-        # Header Text (with tooltip)
-        imgui.spring(1)
+        # Header Text (with node class tooltip)
         imgui.text_unformatted(self.node_title)
-        imgui_node_editor.suspend()
         imgui.set_item_tooltip(type(self).__doc__)
-        imgui_node_editor.resume()
-        imgui.spring(1)
         imgui.end_horizontal()
+
         # space/splitter between header and node content
         imgui.spring(0, imgui.get_style().item_spacing.y * 1)
         self._node_header_height = imgui.get_item_rect_max().y - self.node_area.position.y
@@ -591,11 +588,9 @@ class NodePin:
         imgui.end_horizontal()
         self.pin_area.position = imgui.get_item_rect_min()
         self.pin_area.size = imgui.get_item_rect_size()
-
-        imgui_node_editor.suspend()
         if imgui.is_item_hovered(imgui.HoveredFlags_.for_tooltip) and self.pin_tooltip:
             imgui.set_tooltip(self.pin_tooltip)
-        imgui_node_editor.resume()
+
         imgui_node_editor.end_pin()
 
     def draw_node_pin_contents(self):
