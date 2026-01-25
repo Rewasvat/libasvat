@@ -29,5 +29,6 @@ setuptools.setup(
         "imgui-bundle[all-backends]==1.92.5",  # GUI: Fixed version since it has regular updates, and some with breaking changes.
         "debugpy",  # Enables python debugger
         "google-api-python-client", "google-auth-oauthlib",  # Libs for Google Sheet and related auth
+        "wmi",  # Lib for Windows-based Display data acquisition.
     ]
 )
