@@ -7,7 +7,10 @@ from libasvat.data import DataCache
 from libasvat.imgui.math import Vector2
 from libasvat.imgui.general import menu_item
 from imgui_bundle import imgui, immapp
-from imgui_bundle import hello_imgui, imgui_node_editor  # type: ignore
+from imgui_bundle import hello_imgui, imgui_node_editor, glfw_utils  # type: ignore
+import glfw
+# Note: import order of hello_imgui -> glfw is important!
+from libasvat.imgui.windows_settings import WindowSettings, DisplayManager
 
 
 class BasicWindow(hello_imgui.DockableWindow):
@@ -156,13 +159,14 @@ class AppWindow(BasicWindow):
     The App Window also optionally provides a menu-bar at the top and a status-bar at the bottom of the window.
     """
 
-    def __init__(self, title: str, mode: RunnableAppMode):
+    def __init__(self, title: str, mode: RunnableAppMode, settings: WindowSettings):
         """Constructs a new AppWindow instance with the given TITLE and MODE."""
         super().__init__(title)
         self.mode: RunnableAppMode = mode
         """The Runnable Mode of this App Window"""
-        self.restore_previous_window: bool = True
-        """If the window should restore its previous position/size from another run."""
+        self.settings: WindowSettings = settings
+        """WindowSettings to use - defines how the window will be displayed.
+        This should be properly configured before ``run()`` is called."""
         self.show_status_bar: bool = True
         """If the window should have its bottom status-bar.
 
@@ -206,15 +210,6 @@ class AppWindow(BasicWindow):
         This uses the top-menu bar, so that needs to be enabled."""
         self._imgui_metrics_window_visible = False
         self._imgui_log_window_visible = False
-        self.use_borderless: bool = False
-        """If the window will be borderless.
-
-        The window is still movable/closable/resizable as a regular window: by hovering the mouse in the top border to show a draggable region to
-        move the window and display the close button, and similarly in the bottom-right corner a region allows dragging to resize.
-
-        However, the resizing widget doesn't work well if the status-bar is enabled (see `show_status_bar`).
-        Also, regular OS window shortcuts won't work, such as double-clicking the title bar to maximize it.
-        """
         self.enable_fps_idling: bool = True
         """If FPS Idling is enabled. Default is enabled.
 
@@ -263,6 +258,13 @@ class AppWindow(BasicWindow):
             run_params = hello_imgui.get_runner_params()
             run_params.fps_idling.fps_idle = self.idle_fps
 
+    @property
+    def glfw_window(self):
+        """Gets the main GLFW Window being used by HelloImgui.
+        This *should* be the underlying GLFW window matching this AppWindow if ``run()`` was executed in this window.
+        """
+        return glfw_utils.glfw_window_hello_imgui()
+
     def run(self):
         """Runs this window as a new IMGUI App.
 
@@ -273,12 +275,7 @@ class AppWindow(BasicWindow):
         run_params = hello_imgui.RunnerParams()
         # App Window Params
         run_params.app_window_params.window_title = self.label
-        run_params.app_window_params.restore_previous_geometry = self.restore_previous_window
-        run_params.app_window_params.borderless = self.use_borderless
-
-        # run_params.app_window_params.window_geometry.monitor_idx = 2
-        # # run_params.app_window_params.window_geometry.full_screen_mode = hello_imgui.FullScreenMode.full_monitor_work_area
-        # run_params.app_window_params.window_geometry.window_size_state = hello_imgui.WindowSizeState.maximized
+        self.settings.apply(run_params.app_window_params)
 
         # IMGUI Window Params
         run_params.imgui_window_params.menu_app_title = self.label
@@ -298,6 +295,7 @@ class AppWindow(BasicWindow):
         run_params.callbacks.post_init = self.on_init
         run_params.callbacks.pre_new_frame = self.on_pre_new_frame
         run_params.callbacks.after_swap = self.on_after_frame
+        run_params.callbacks.setup_imgui_style = self.on_setup_imgui_style
 
         # First, tell HelloImGui that we want full screen dock space (this will create "MainDockSpace")
         if self.mode == RunnableAppMode.DOCK:
@@ -328,6 +326,8 @@ class AppWindow(BasicWindow):
         addons = immapp.AddOnsParams()
         addons.with_markdown = True
         addons.with_node_editor = True
+        addons.with_node_editor_config = imgui_node_editor.Config()
+        addons.with_node_editor_config.force_window_content_width_to_node_width = True
 
         node_config = imgui_node_editor.Config()
         # node_config.settings_file = ""
@@ -342,6 +342,7 @@ class AppWindow(BasicWindow):
         else:
             click.secho("Couln't load IMGUI Node Editor Settings from cache", fg="yellow")
 
+        glfw.init()
         immapp.run(
             runner_params=run_params,
             add_ons_params=addons
@@ -382,9 +383,14 @@ class AppWindow(BasicWindow):
         Basically, this is called when the window is opened, after imgui initializes but before rendering frames begins.
         In other words, should be called shortly after ``self.run()`` is executed.
 
-        Sub classes may override this to add their own initialization logic. The default implementation does nothing.
+        Sub classes may override this to add their own initialization logic, but remember to execute the super() implementation!
         """
         self._is_running = True
+
+        displays = DisplayManager()
+        displays.refresh()
+
+        self.settings.on_init(self)
 
     def on_before_exit(self):
         """Callback executed once before the app window exits.
@@ -431,6 +437,14 @@ class AppWindow(BasicWindow):
             sleep_time = frame_duration - elapsed
             if sleep_time > 0:
                 time.sleep(sleep_time)
+
+    def on_setup_imgui_style(self):
+        """Callback called by HelloImgui to allow the app to easily update imgui's style as it wishes
+        during initialization.
+
+        Subclasses may override this method to do their own style setup logic.
+        """
+        pass
 
     def add_child_window(self, child: BasicWindow):
         """Adds a new child window to this AppWindow.
@@ -543,3 +557,9 @@ class AppWindow(BasicWindow):
             self._imgui_metrics_window_visible = imgui.show_metrics_window(self._imgui_metrics_window_visible)
         if self._imgui_log_window_visible:
             self._imgui_log_window_visible = imgui.show_debug_log_window(self._imgui_log_window_visible)
+
+    def maximize(self):
+        """Maximizes this window, changing its position and size to fill the available area of its monitor.
+        This will only work if this is the main window (where ``self.run()`` was called).
+        """
+        glfw.maximize_window(self.glfw_window)
