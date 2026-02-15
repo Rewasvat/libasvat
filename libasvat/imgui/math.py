@@ -37,6 +37,9 @@ class Vector2(ImVec2):
             return self.__class__(self.x + other, self.y + other)
         return self.__class__(self[0] + other[0], self[1] + other[1])
 
+    def __iadd__(self, other):
+        return self + other
+
     def __sub__(self, other):
         """SUBTRACTION: returns a new Vector2 instance with our values and ``other`` subtracted.
 
@@ -47,6 +50,9 @@ class Vector2(ImVec2):
         if isinstance(other, (float, int)):
             return self.__class__(self.x - other, self.y - other)
         return self.__class__(self[0] - other[0], self[1] - other[1])
+
+    def __isub__(self, other):
+        return self - other
 
     def __mul__(self, other):
         """MULTIPLICATION: returns a new Vector2 instance with our values and ``other`` multiplied.
@@ -135,15 +141,29 @@ class Vector2(ImVec2):
         return self.__class__(self.x, self.y)
 
     def clamp(self, min_value: float, max_value: float):
-        """Clamps each the value of each component of this Vector2 to
+        """Clamps (in-place) the value of each component of this Vector2 to
         the given min/max values.
 
+        Each argument can be one of the following types:
+        * `float`: This value is applied as the limit for both components.
+        * `Vector2`: Each component of the value is applied as the limit for the corresponding component
+        of this vector.
+
         Args:
-            min_value (float): minimum value for each component.
-            max_value (float): maximum value for each component.
+            min_value (float|Vector2): minimum value for each component.
+            max_value (float|Vector2): maximum value for each component.
         """
-        self.x = min(max_value, max(min_value, self.x))
-        self.y = min(max_value, max(min_value, self.y))
+        # Making sure min/max values are vectors
+        max_value = Vector2() + max_value
+        min_value = Vector2() + min_value
+        # Clamp our components
+        self.x = min(max_value.x, max(min_value.x, self.x))
+        self.y = min(max_value.y, max(min_value.y, self.y))
+
+    def clear(self):
+        """Resets each component of this vector to 0."""
+        self.x = 0
+        self.y = 0
 
     def max(self, *args: 'Vector2'):
         """Get a new Vector2 object where each component is the maximum component
@@ -311,7 +331,7 @@ class Rectangle:
         return Rectangle(pos, size)
 
     def __contains__(self, other):
-        if isinstance(other, Vector2):
+        if isinstance(other, ImVec2):
             return (self.position.x <= other.x <= self.bottom_right_pos.x) and (self.position.y <= other.y <= self.bottom_right_pos.y)
         elif isinstance(other, Rectangle):
             return (other.position in self) and (other.bottom_right_pos in self)
