@@ -7,7 +7,7 @@ import platform
 import traceback
 import multiprocessing
 from libasvat.command_utils import Singleton
-from typing import Callable
+from typing import Callable, Mapping
 
 
 def safe_pickle_save(file_path: str, data):
@@ -56,12 +56,29 @@ def update_module_path_in_pickled_object(pickle_path: str, old_module_path: str,
         old_module_path (str): The old.dotted.path.to.renamed.module.
         new_module (ModuleType): from new.location import module.
     """
-    # NOTE: this might not be working...
     import sys
     sys.modules[old_module_path] = new_module
-    dic = pickle.load(open(pickle_path, "rb"))
-    del sys.modules[old_module_path]
-    pickle.dump(dic, open(pickle_path, "wb"))
+    try:
+        with open(pickle_path, 'rb') as file_obj:
+            dic = pickle.load(file_obj)
+        with open(pickle_path, 'wb') as file_obj:
+            pickle.dump(dic, file_obj)
+    finally:
+        del sys.modules[old_module_path]
+
+
+class PicklePathTranslationUnpickler(pickle.Unpickler):
+    def __init__(self, file, path_translations: Mapping[str, str]):
+        super().__init__(file)
+        self._path_translations = path_translations
+
+    def find_class(self, module: str, name: str):
+        full_name = f"{module}.{name}"
+        if full_name in self._path_translations:
+            module, name = self._path_translations[full_name].rsplit('.', 1)
+        elif module in self._path_translations:
+            module = self._path_translations[module]
+        return super().find_class(module, name)
 
 
 class DataCache(metaclass=Singleton):
@@ -87,6 +104,7 @@ class DataCache(metaclass=Singleton):
         self._app_name: str = None
         self._service_id: str = None
         self._saving_enabled = multiprocessing.current_process().name == "MainProcess"
+        self._pickle_path_translations: dict[str, str] = {}
         self.set_cache_path(os.path.expanduser("~"))
 
     def get_app_name(self):
@@ -132,6 +150,28 @@ class DataCache(metaclass=Singleton):
         """
         self._saving_enabled = enabled
 
+    def register_pickle_path_translation(self, old_dotted_path: str, new_dotted_path: str):
+        """Register a translation for an old pickle module path to a new one.
+
+        This can be used before loading data in the DataCache object in order to fix paths for pickled classes that
+        have changed location.
+        """
+        self._pickle_path_translations[old_dotted_path] = new_dotted_path
+
+    def clear_pickle_path_translations(self):
+        """Clear any registered pickle path translations."""
+        self._pickle_path_translations.clear()
+
+    def _load_pickle_with_translations(self, file_path: str):
+        with open(file_path, 'rb') as file_obj:
+            try:
+                return pickle.load(file_obj)
+            except (ModuleNotFoundError, AttributeError):
+                if not self._pickle_path_translations:
+                    raise
+                file_obj.seek(0)
+                return PicklePathTranslationUnpickler(file_obj, self._pickle_path_translations).load()
+
     @property
     def data_path(self):
         """Path and filename to the main datacache file."""
@@ -156,8 +196,7 @@ class DataCache(metaclass=Singleton):
         Since data is saved/loaded with pickle, when the cache is loaded, all pickled objects in it will be recreated."""
         if self._cache_data is None:
             if os.path.exists(self.data_path):
-                with open(self.data_path, 'rb') as file_obj:
-                    self._cache_data = pickle.load(file_obj)
+                self._cache_data = self._load_pickle_with_translations(self.data_path)
             else:
                 self._cache_data = {}
         return self._cache_data
@@ -216,8 +255,7 @@ class DataCache(metaclass=Singleton):
         if data is None and key in custom_data_keys:
             cache_path = self._get_custom_cache_path(key)
             if os.path.isfile(cache_path):
-                with open(cache_path, 'rb') as file_obj:
-                    data = pickle.load(file_obj)
+                data = self._load_pickle_with_translations(cache_path)
                 self._custom_data[key] = data
             else:
                 click.secho(f"[ERROR] Custom Cache file for '{key}' doesn't exist.", fg="red")
