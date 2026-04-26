@@ -4,6 +4,7 @@ from libasvat.imgui.math import Vector2
 from libasvat.imgui.editors.database import TypeDatabase
 from libasvat.imgui.editors.editor import TypeEditor, imgui_property
 from imgui_bundle import imgui
+from imgui_bundle import portable_file_dialogs as pfd  # type: ignore
 from enum import Enum
 
 
@@ -21,12 +22,31 @@ class StringEditor(TypeEditor):
         self.enforce_options: bool = config.get("enforce_options", True)
         self.add_tooltip_after_value = self.options is None
         self.multiline: bool = config.get("multiline", False)
+        self.is_folder: bool = config.get("is_folder", False)
+        """If true, this string property represents a folder-path, and the editor will allow opening a file-dialog for selecting a folder."""
         self.color = Colors.magenta
         self.extra_accepted_input_types = object
         self.convert_value_to_type = True
+        self._open_folder_dialog: pfd.select_folder = None
 
     def draw_value_editor(self, value: str) -> tuple[bool, str]:
-        if self.options is None:
+        if self.is_folder:
+            changed = False
+            if self._open_folder_dialog:
+                imgui.text("[SELECTING]")
+                if self._open_folder_dialog.ready():
+                    result = self._open_folder_dialog.result()
+                    if result:
+                        changed = True
+                        value = result
+                    self._open_folder_dialog = None
+            else:
+                if imgui.button("Select Folder"):
+                    self._open_folder_dialog = pfd.select_folder("Select a Folder")
+            imgui.same_line()
+            imgui.text(value)
+            return changed, value
+        elif self.options is None:
             if value is None:
                 value = ""
             num_lines = value.count("\n") + 1
@@ -40,7 +60,8 @@ class StringEditor(TypeEditor):
             return drop_down(value, self.options, self.docs, default_doc=self.attr_doc, enforce=self.enforce_options, item_flags=self.option_flags)
 
 
-def string_property(flags: imgui.InputTextFlags_ = 0, options: list[str] = None, docs: list | dict = None, option_flags: imgui.SelectableFlags_ = 0):
+def string_property(flags: imgui.InputTextFlags_ = 0, options: list[str] = None, docs: list | dict = None, option_flags: imgui.SelectableFlags_ = 0,
+                    is_folder=False):
     """Imgui Property attribute for a STRING type.
 
     Behaves the same way as a property, but includes a StringEditor object for allowing changing this string's value in imgui.
@@ -53,8 +74,10 @@ def string_property(flags: imgui.InputTextFlags_ = 0, options: list[str] = None,
             Should be a ``list[str]`` matching the length of ``options``, or a ``{option: doc}`` dict. The property's docstring is used as a default
             tooltip for all options.
         option_flags (imgui.SelectableFlags_, optional): Flags passed down to the drop-down selectable.
+        is_folder (bool, optional): if true, this string property represents a folder-path and as such the editor will allow opening a file-dialog
+            for selecting a folder.
     """
-    return imgui_property(flags=flags, options=options, docs=docs, option_flags=option_flags)
+    return imgui_property(flags=flags, options=options, docs=docs, option_flags=option_flags, is_folder=is_folder)
 
 
 @TypeDatabase.register_editor_for_type(Enum, False)
