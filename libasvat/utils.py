@@ -568,3 +568,21 @@ def try_app_restart():
     if is_frozen():
         subprocess.Popen([sys.executable], env={**os.environ, "PYINSTALLER_RESET_ENVIRONMENT": "1"})
         sys.exit(0)
+
+
+def format_bytes(bytes_value: float, precision: int = 2):
+    """Converts a value in bytes to a human-readable string, with the most appropriate unit.
+
+    Args:
+        bytes_value (float): value to convert
+        precision (int, optional): decimal plate precision. Defaults to 2.
+
+    Returns:
+        str: the given value as a string, with the given amount of precision, converted to the largest unit possible.
+        From Bytes up to PetaBytes.
+    """
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if bytes_value < 1024:
+            return f"{bytes_value:.{precision}f} {unit}"
+        bytes_value /= 1024
+    return f"{bytes_value:.{precision}f} PB"
