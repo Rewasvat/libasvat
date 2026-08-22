@@ -111,7 +111,12 @@ class DisplayManager(metaclass=cmd_utils.Singleton):
         self._infos.clear()
         for i, (glfw_mon, wmi_mon) in enumerate(zip(glfw.get_monitors(), wmi_root.WmiMonitorID())):
             # WMI values: ManufacturerName, UserFriendlyName, SerialNumberID are arrays of uint16
-            name = "".join([chr(c) for c in wmi_mon.UserFriendlyName if c != 0])
+            if wmi_mon.UserFriendlyName is not None:
+                name = "".join([chr(c) for c in wmi_mon.UserFriendlyName if c != 0])
+            elif wmi_mon.ManufacturerName is not None:
+                name = "".join([chr(c) for c in wmi_mon.ManufacturerName if c != 0])
+            else:
+                name = "Generic Monitor"
             info = DisplayInfo(i, name)
             info.update(glfw_mon)
             self._infos.append(info)
