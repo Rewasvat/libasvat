@@ -168,10 +168,11 @@ def load_all_modules(modules_path: str, import_path: str = None, ignore_paths=[]
     modules = walkpkg(modules_path)
     prefix = os.path.commonprefix(modules)
     modules = [filepath.replace(prefix, "").replace(os.path.sep, ".") for filepath in modules]
-    if is_frozen():
-        modules = [importlib.import_module(name) for name in modules if name.startswith(import_path) and filter(name[len(import_path):])]
-    else:
-        modules = [importlib.import_module(f"{import_path}.{name}") for name in modules if filter(name)]
+    # NOTE: apparently this isnt working (anymore?), but the non-frozen method is working but in non-frozen as well as frozen builds.
+    # if is_frozen():
+    #     modules = [importlib.import_module(name) for name in modules if name.startswith(import_path) and filter(name[len(import_path):])]
+    # else:
+    modules = [importlib.import_module(f"{import_path}.{name}") for name in modules if filter(name)]
 
     return modules
 
