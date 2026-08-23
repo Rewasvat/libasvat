@@ -19,14 +19,15 @@ classifiers = [
 license = "MIT"
 license-files = ["LICEN[CS]E*"]
 dependencies = [
-    "setuptools_scm",
     "Click>=8.1.0",
     "Colorama",
     "keyring",
-    "imgui-bundle",
+    "imgui-bundle[all-backends]==1.92.5",
+    "glfw",
     "debugpy",
     "google-api-python-client",
     "google-auth-oauthlib",
+    "wmi",
 ]
 
 [project.urls]
